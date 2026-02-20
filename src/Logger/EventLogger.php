@@ -4,6 +4,7 @@ namespace MB\Bitrix\Logger;
 
 use Bitrix\Main\Diag\Logger;
 use CEventLog;
+use Psr\Log\LogLevel;
 
 /**
  * Логирование в журнал событий (/bitrix/admin/event_log.php)
@@ -25,8 +26,8 @@ class EventLogger extends Logger
         LogLevel::DEBUG => CEventLog::SEVERITY_DEBUG,
     ];
     protected const DEFAULT_LEVEL = 'UNKNOWN';
-    public const DEFAULT_EVENT_TYPE = 'MB_CORE_MISC';
-    public const DEFAULT_MODULE_ID = 'mb.core';
+    public const DEFAULT_EVENT_TYPE = 'MAIN_MISC';
+    public const DEFAULT_MODULE_ID = 'main';
 
     protected string $eventType;
     protected string $eventModuleId;
@@ -34,9 +35,9 @@ class EventLogger extends Logger
     protected string $defaultEventType = self::DEFAULT_EVENT_TYPE;
     protected string $defaultEventModuleId = self::DEFAULT_MODULE_ID;
 
-    public function __construct(string $moduleId = self::DEFAULT_MODULE_ID, string $eventType = self::DEFAULT_EVENT_TYPE)
+    public function __construct(?string $moduleId, string $eventType = self::DEFAULT_EVENT_TYPE)
     {
-        $this->setModuleId($moduleId);
+        $this->setModuleId($moduleId ?? self::DEFAULT_MODULE_ID);
         $this->setEventType($eventType);
     }
 

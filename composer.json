@@ -15,6 +15,7 @@
     "mb4it/collections": "^1.0",
     "mb4it/conditionable": "@dev",
     "mb4it/filesystem": "^1.0",
+    "mb4it/logger": "@dev",
     "spatie/image": "^3.8",
     "ext-fileinfo": "*",
     "psr/log": "^1.0|^2.0|^3.0"

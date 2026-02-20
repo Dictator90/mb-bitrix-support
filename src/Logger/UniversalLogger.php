@@ -3,6 +3,7 @@
 namespace MB\Bitrix\Logger;
 
 use Psr\Log\AbstractLogger;
+use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
 
 /**
@@ -30,7 +31,7 @@ class UniversalLogger extends AbstractLogger
         LogLevel::NOTICE,
     ];
 
-    private FileLogger $fileLogger;
+    private LoggerInterface $fileLogger;
     private EventLogger $eventLogger;
     private NotificationLogger $notificationLogger;
 
@@ -42,13 +43,10 @@ class UniversalLogger extends AbstractLogger
      * @param int|null $logFileMaxSize макс. размер файла (null = FileLogger::LOG_FILE_MAX_SIZE)
      */
     public function __construct(
-        string $relativeFileName,
         string $moduleId = 'main',
-        bool $autoDate = true,
-        ?string $logFolder = null,
-        ?int $logFileMaxSize = null
+        bool $daily = true
     ) {
-        $this->fileLogger = new FileLogger($relativeFileName, $autoDate, $logFolder, $logFileMaxSize);
+        $this->fileLogger = (new LoggerFactory($moduleId))->file(daily: $daily);
         $this->eventLogger = new EventLogger($moduleId);
         $this->notificationLogger = new NotificationLogger($moduleId);
     }

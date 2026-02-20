@@ -2,17 +2,15 @@
 
 declare(strict_types=1);
 
-namespace MB\Bitrix\Support;
+namespace MB\Bitrix\Logger;
 
 use MB\Bitrix\Contracts\Log\LoggerFactoryInterface;
-use MB\Bitrix\Foundation\ServiceProvider;
-use MB\Bitrix\Logger\LoggerFactory;
-use MB\Bitrix\Logger\UniversalLogger;
+use MB\Bitrix\Foundation\ServiceProvider as BaseServiceProvider;
 
 /**
  * Registers logger factory and default logger in the container.
  */
-final class LoggerServiceProvider extends ServiceProvider
+final class ServiceProvider extends BaseServiceProvider
 {
     public function register(): void
     {

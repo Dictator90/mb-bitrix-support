@@ -21,7 +21,7 @@
 Файл: `src/Logger/FileLogger.php`  
 Пространство имён: `MB\Bitrix\Logger`
 
-Наследует `Bitrix\Main\Diag\FileLogger`, добавляя:
+Является самостоятельной реализацией файлового логгера, добавляя:
 
 - каталог логов по умолчанию: `LOG_FOLDER = '/local/logs/'`;
 - максимальный размер файла: `LOG_FILE_MAX_SIZE = 1048576` (1 МБ);
@@ -43,8 +43,9 @@ public function __construct(
 
 - если `$autoDate = true` и у `$relativeFileName` нет расширения, то:
   - итоговый путь будет вида `{$relativeFileName}/Y-m-d.log`;
-- путь к файлу строится как `DOCUMENT_ROOT . $logFolder . $fileNamePath`;
-- при необходимости автоматически создаются каталоги через `Bitrix\Main\IO\Directory`.
+- путь к файлу строится как `DOCUMENT_ROOT . $relativePath`, где `$relativePath` формируется из `$logFolder` и относительного пути;
+- при необходимости автоматически создаются каталоги через фасад `MB\Bitrix\Support\Facades\Filesystem`;
+- при достижении размера `LOG_FILE_MAX_SIZE` текущий файл переименовывается в резервную копию с суффиксом `.1`, а новый лог продолжается в свежем файле.
 
 Дополнительные методы:
 

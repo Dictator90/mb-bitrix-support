@@ -20,9 +20,9 @@ class NotificationLogger extends Logger
     protected string $defaultEventType = self::DEFAULT_EVENT_TYPE;
     protected string $defaultEventModuleId = self::DEFAULT_MODULE_ID;
 
-    public function __construct(string $moduleId = self::DEFAULT_MODULE_ID, string $eventType = self::DEFAULT_EVENT_TYPE)
+    public function __construct(?string $moduleId, string $eventType = self::DEFAULT_EVENT_TYPE)
     {
-        $this->setModuleId($moduleId);
+        $this->setModuleId($moduleId ?? self::DEFAULT_MODULE_ID);
         $this->setEventType($eventType);
     }
 

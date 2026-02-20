@@ -6,6 +6,7 @@ use MB\Bitrix\ServiceProvider as BitrixServiceProvider;
 use MB\Bitrix\Contracts\Module\Entity as ModuleEntityContract;
 use MB\Bitrix\Filesystem\ServiceProvider as FilesystemServiceProvider;
 use MB\Bitrix\Migration\ServiceProvider as MigrationServiceProvider;
+use MB\Bitrix\Logger\ServiceProvider as LoggerServiceProvider;
 use MB\Bitrix\Module\Entity as ModuleEntity;
 use MB\Bitrix\Module\ServiceProvider as ModuleServiceProvider;
 use MB\Bitrix\Page\Asset;
@@ -15,6 +16,7 @@ use MB\Container\Container;
 use MB\Container\Exceptions\ContainerException;
 use MB\Container\Exceptions\NotFoundException;
 use Psr\Container\ContainerInterface;
+use Psr\Log\LoggerInterface;
 use ReflectionClass;
 use ReflectionFunction;
 use ReflectionMethod;
@@ -138,7 +140,7 @@ class Application extends Container
         $this->register(FilesystemServiceProvider::class);
         $this->register(MigrationServiceProvider::class);
         $this->register(BitrixServiceProvider::class);
-        $this->register(\MB\Bitrix\Support\LoggerServiceProvider::class);
+        $this->register(LoggerServiceProvider::class);
         $this->register(ModuleServiceProvider::class);
     }
 
@@ -181,10 +183,10 @@ class Application extends Container
      */
     protected function bindPathsInContainer(): void
     {
-        $this->singleton('path.local', fn () => BitrixApplication::getDocumentRoot() . '/local');
-        $this->singleton('path.bitrix', fn () => BitrixApplication::getDocumentRoot() . '/bitrix');
+        $this->singleton('path.root', fn () => BitrixApplication::getDocumentRoot());
+        $this->singleton('path.local', fn (Application $app) => $app->get('path.root') . '/local');
+        $this->singleton('path.bitrix', fn (Application $app) => $app->get('path.root') . '/bitrix');
         $this->singleton('path.template', fn () => defined('SITE_TEMPLATE_PATH') ? SITE_TEMPLATE_PATH : '');
-        $this->singleton('path.front', fn (Application $app) => BitrixApplication::getDocumentRoot() . $app->get('kernel.options')->get('front_path'));
 
     }
 
@@ -193,6 +195,7 @@ class Application extends Container
         $this->singleton("$moduleId:module", fn (Application $app) => $app->makeWith(ModuleEntityContract::class, ['moduleId' => $moduleId]));
         $this->bind("$moduleId:config", fn (Application $app) => $app->make("$moduleId:module")->getConfig(''));
         $this->singleton("$moduleId:migration", fn (Application $app) => $app->makeWith(ModuleEntityContract::class, ['module' => "$moduleId:module"]));
+        $this->singleton("$moduleId:logger", fn (Application $app) => $app->makeWith('logger', ['moduleId' => $moduleId]));
         //$this->singleton("$moduleId:admin.page", fn (Application $app) => new PageManager($app->make("$moduleId:module")));
     }
 
