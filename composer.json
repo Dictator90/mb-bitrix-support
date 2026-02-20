@@ -1,12 +1,12 @@
 {
-  "name": "mb/bitrix-support",
+  "name": "mb4it/bitrix-support",
   "description": "description",
   "minimum-stability": "stable",
   "license": "MIT",
   "authors": [
     {
-      "name": "mbezv",
-      "email": "email@example.com"
+      "name": "Maxim Bezvodinskikh",
+      "email": "m.bezvodinskikh@gmail.com"
     }
   ],
   "require": {
