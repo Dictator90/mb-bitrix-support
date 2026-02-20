@@ -11,10 +11,10 @@
   ],
   "require": {
     "mb4it/container": "@dev",
-    "mb4it/stringable": "^1.0",
-    "mb4it/collections": "^1.0",
+    "mb4it/stringable": "@dev",
+    "mb4it/collections": "@dev",
     "mb4it/conditionable": "@dev",
-    "mb4it/filesystem": "^1.0",
+    "mb4it/filesystem": "@dev",
     "mb4it/logger": "@dev",
     "spatie/image": "^3.8",
     "ext-fileinfo": "*",
