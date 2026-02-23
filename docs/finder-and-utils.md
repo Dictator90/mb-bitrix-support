@@ -2,62 +2,51 @@
 
 Помимо крупных подсистем (файлы, HL-блоки, миграции и т.п.), пакет содержит набор небольших, но полезных утилит:
 
-- поисковик классов `MB\Bitrix\Finder\ClassFinder`;
+- поиск классов через `MB\Bitrix\Filesystem\Filesystem::classFinder()` (mb4it/filesystem);
 - трейты для кэширования `MB\Bitrix\Traits\Cacheable` и `MB\Bitrix\Traits\RememberCachable`;
 - (см. также разделы `storage-advanced.md`, `logging-and-events.md`, где эти утилиты используются).
 
 ---
 
-## Поиск классов: `Finder\ClassFinder`
+## Поиск классов: `Filesystem::classFinder()`
 
-Файл: `src/Finder/ClassFinder.php`  
-Пространство имён: `MB\Bitrix\Finder`
+Мост: `MB\Bitrix\Filesystem\Filesystem` (см. `src/Filesystem/Filesystem.php`).  
+Поиск реализован пакетом mb4it/filesystem (`MB\Filesystem\Finder\ClassFinder`): обход PHP‑файлов и разбор токенов без загрузки классов (без ReflectionClass/autoload).
 
-Назначение: **поиск классов по файловой системе, которые либо наследуют заданный базовый класс, либо реализуют интерфейс.**
+Используется менеджерами:
 
-Используется, в частности, менеджерами:
+- `HighloadBlock\HighloadBlockManager` — поиск классов, наследующих `HighloadBlock\Base`;
+- `Agent\AgentManager` — наследников `Agent\Base`;
+- `Event\EventManager` — наследников `Event\Base`.
 
-- `HighloadBlock\HighloadBlockManager` — для поиска всех классов, наследующих `HighloadBlock\Base`;
-- `Agent\AgentManager` — для поиска всех наследников `Agent\Base`;
-- `Event\EventManager` — для поиска всех наследников `Event\Base`.
+### API
 
-### Методы
+- **`Filesystem::classFinder()->extends(string $directory, string $baseClassFqcn): array`**  
+  Возвращает массив метаданных (для каждого класса: `class`, `file`, `namespace`, `short_name`, `extends`, `implements`, `traits`).  
+  Список FQCN: `array_column(Filesystem::classFinder()->extends($dir, $baseClass), 'class')`.
 
-```php
-public static function findExtended(string $dir, string $namespace, string $parentClass)
-```
+- **`implements(string $directory, string $interfaceFqcn): array`** — поиск классов, реализующих интерфейс (тот же формат метаданных).
 
-- рекурсивно обходит каталог `$dir` (`RecursiveDirectoryIterator` + `RecursiveIteratorIterator`);
-- для каждого PHP‑файла:
-  - строит имя класса как `$namespace . str_replace('/', '\\', $relativePath) . '\\' . $basename`;
-  - пытается создать `ReflectionClass`;
-  - добавляет в результат, если:
-    - класс не абстрактный;
-    - является наследником `$parentClass` (`isSubclassOf()`).
+- **`hasTrait(string $directory, string $traitFqcn): array`** — поиск классов, использующих трейт.
+
+### Пример
 
 ```php
-public static function findImplements(string $dir, string $namespace, string $interfaceClass)
+use MB\Bitrix\Filesystem\Filesystem;
+
+$dir = $module->getLibPath();
+
+// Список FQCN наследников базового класса
+$hlClasses = array_column(
+    Filesystem::classFinder()->extends($dir, \MB\Bitrix\HighloadBlock\Base::class),
+    'class'
+);
+
+// Все реализации интерфейса (массив метаданных)
+$handlers = Filesystem::classFinder()->implements($dir, \My\Module\Contracts\HandlerInterface::class);
 ```
 
-- похожая логика, но фильтрует по `implementsInterface($interfaceClass)`;
-- дополнительно проверяет, что `$relativePath` не пуст (чтобы исключить базовые классы из корня).
-
-### Пример использования
-
-```php
-use MB\Bitrix\Finder\ClassFinder;
-
-$dir = $module->getLibPath();      // /local/modules/my.module/lib
-$namespace = $module->getNamespace(); // \My\Module\
-
-// Все наследники абстрактного базового класса
-$hlClasses = ClassFinder::findExtended($dir, $namespace, \MB\Bitrix\HighloadBlock\Base::class);
-
-// Все реализации интерфейса
-$handlers = ClassFinder::findImplements($dir, $namespace, \My\Module\Contracts\HandlerInterface::class);
-```
-
-Это позволяет реализовать множество сценариев «по конвенции, а не по конфигурации», когда достаточно унаследоваться от базового класса или реализовать интерфейс, и сущность будет автоматически найдена и обработана (например, зарегистрирована как агент или обработчик события).
+Это позволяет реализовать сценарии «по конвенции»: достаточно унаследоваться от базового класса или реализовать интерфейс — сущность будет найдена и обработана (агент, обработчик события, HL-блок и т.д.).
 
 ---
 

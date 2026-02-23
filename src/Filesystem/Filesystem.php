@@ -6,7 +6,7 @@ namespace MB\Bitrix\Filesystem;
 
 use Bitrix\Main\Application;
 use MB\Filesystem\Filesystem as NativeFilesystem;
-use MB\Filesystem\Finder\PhpClassFinder;
+use MB\Filesystem\Finder\ClassFinder;
 
 /**
  * Bitrix-oriented facade around mb4it/filesystem.
@@ -33,7 +33,7 @@ final class Filesystem
 
     public static function classFinder()
     {
-        return new PhpClassFinder(self::instance());
+        return new ClassFinder(self::instance());
     }
     /**
      * Override the shared instance (useful for testing).

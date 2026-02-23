@@ -6,7 +6,7 @@ use Bitrix\Main;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Db\SqlQueryException;
 use Bitrix\Main\NotImplementedException;
-use MB\Bitrix\Finder\ClassFinder;
+use MB\Bitrix\Filesystem\Filesystem;
 use MB\Bitrix\Migration\BaseEntityManager;
 use MB\Bitrix\Migration\Result;
 use MB\Support\Str;
@@ -78,10 +78,9 @@ class EventManager extends BaseEntityManager
         $result = new Result();
 
         try {
-            $classList = ClassFinder::findExtended(
-                $this->module->getLibPath(),
-                $this->module->getNamespace(),
-                $this->getEntityClass()
+            $classList = array_column(
+                Filesystem::classFinder()->extends($this->module->getLibPath(), $this->getEntityClass()),
+                'class'
             );
 
             $handlerList = $this->getClassHandlers($classList);

@@ -2,7 +2,7 @@
 
 namespace MB\Bitrix\HighloadBlock;
 
-use MB\Bitrix\Finder\ClassFinder;
+use MB\Bitrix\Filesystem\Filesystem;
 use MB\Bitrix\Migration\BaseEntityManager;
 use MB\Bitrix\Migration\Result;
 
@@ -50,10 +50,9 @@ class HighloadBlockManager extends BaseEntityManager
     protected function dropTable(): Result
     {
         $result = new Result();
-        $classList = ClassFinder::findExtended(
-            $this->module->getLibPath(),
-            $this->module->getNamespace(),
-            $this->getEntityClass()
+        $classList = array_column(
+            Filesystem::classFinder()->extends($this->module->getLibPath(), $this->getEntityClass()),
+            'class'
         );
 
         return $this->dropTableFor($classList, $result);
@@ -86,10 +85,9 @@ class HighloadBlockManager extends BaseEntityManager
     {
         $result = new Result();
 
-        $classList = $classList ?? ClassFinder::findExtended(
-            $this->module->getLibPath(),
-            $this->module->getNamespace(),
-            $this->getEntityClass()
+        $classList = $classList ?? array_column(
+            Filesystem::classFinder()->extends($this->module->getLibPath(), $this->getEntityClass()),
+            'class'
         );
 
         foreach ($classList as $className) {

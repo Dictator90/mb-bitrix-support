@@ -7,7 +7,7 @@ use Exception;
 use Illuminate\Support\Collection;
 use MB\Core\Module\ModuleContainer;
 use MB\Core\Module\ModuleEntity;
-use MB\Core\Support\Finder\ClassFinder;
+use MB\Bitrix\Filesystem\Filesystem;
 use MB\Core\Support\Traits\BitrixEventsObservableTrait;
 
 class PageRegistry
@@ -36,10 +36,9 @@ class PageRegistry
      */
     public function getEntities(): Collection
     {
-        $result = ClassFinder::findExtended(
-            $this->module->getLibPath(),
-            $this->module->getNamespace(),
-            Entity\Base::getClassName()
+        $result = array_column(
+            Filesystem::classFinder()->extends($this->module->getLibPath(), Entity\Base::getClassName()),
+            'class'
         );
 
         return collect(self::onGetPagesEntityEvent($result));

@@ -104,7 +104,7 @@ class SyncAgent extends AgentBase
 
 - **`getEntityClass(): string`** — возвращает `Base::class`;
 - **`syncAll(): Result` / `update(): Result`**
-  - через `ClassFinder::findExtended()` находит все классы модуля, наследующие `Agent\Base`;
+  - через `Filesystem::classFinder()->extends()` находит все классы модуля, наследующие `Agent\Base`;
   - извлекает из них описания агентов (`getClassAgents()`);
   - получает все зарегистрированные агенты модуля (`getRegisteredAgents(true)`), фильтруя по `MODULE_ID` и имени;
   - вызывает `saveAgents()` и `deleteAgents()` для приведения состояния в БД к описаниям в коде.
@@ -211,7 +211,7 @@ class UserHandlers extends EventBase
 - в конструкторе инициализируется `Main\EventManager::getInstance()`;
 - **`getEntityClass(): string`** — возвращает `Event\Base::class`;
 - **`syncAll(): Result` / `update(): Result`**
-  - через `ClassFinder::findExtended()` находит все классы‑наследники `Event\Base` в модуле;
+  - через `Filesystem::classFinder()->extends()` находит все классы‑наследники `Event\Base` в модуле;
   - для каждого класса получает список обработчиков через `getHandlers()` (`getClassHandlers()`);
   - формирует ключи и сравнивает с уже зарегистрированными обработчиками (`getRegisteredHandlers()`):
     - добавляет недостающие (`saveHandlers()`/`saveHandler()`);

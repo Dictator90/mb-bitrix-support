@@ -58,7 +58,7 @@ abstract class BaseEntityManager
 - наследует `BaseEntityManager`;
 - `getEntityClass()` возвращает `MB\Bitrix\HighloadBlock\Base::class`;
 - `update()`:
-  - находит все классы, наследующие `HighloadBlock\Base`, через `Finder\ClassFinder::findExtended()`;
+  - находит все классы, наследующие `HighloadBlock\Base`, через `Filesystem::classFinder()->extends()`;
   - у каждого вызывает `createTable()` или `refresh()` в зависимости от существования HL-блока;
 - `deleteAll()` — удаляет все HL-блоки модуля;
 - дополнительные удобные методы `createFor()`/`dropFor()` для работы с одним конкретным классом.
@@ -109,7 +109,7 @@ abstract class BaseEntityManager
 
 - `getEntityClass(): string` — возвращает `Agent\Base::class`;
 - `update(): Result`:
-  - через `Finder\ClassFinder::findExtended()` находит все классы, наследующие `Agent\Base` в модуле;
+  - через `Filesystem::classFinder()->extends()` находит все классы, наследующие `Agent\Base` в модуле;
   - строит актуальный список агентов (`getClassAgents()`);
   - сравнивает его с зарегистрированными агентами `CAgent::GetList` и:
     - добавляет/обновляет недостающие (`saveAgents()`/`saveAgent()`);
@@ -168,7 +168,7 @@ $result = $manager->syncAll(); // или update()
 Основные задачи:
 
 - **`syncAll()` / `update()`**:
-  - находит через `ClassFinder::findExtended()` все классы, наследующие `Event\Base`;
+  - находит через `Filesystem::classFinder()->extends()` все классы, наследующие `Event\Base`;
   - для каждого класса получает описания обработчиков (`getHandlers()`);
   - сравнивает их с уже зарегистрированными (`getRegisteredHandlers()`), исходя из неймспейса модуля;
   - добавляет недостающие (`saveHandler()`/`saveHandlers()`), удаляет лишние (`deleteHandler()`/`deleteHandlers()`).

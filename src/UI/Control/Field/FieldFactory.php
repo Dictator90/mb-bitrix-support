@@ -4,7 +4,6 @@ namespace MB\Bitrix\UI\Control\Field;
 
 use MB\Bitrix\Filesystem\Filesystem;
 use MB\Container\Container;
-use MB\Filesystem\Finder\PhpClassFinder;
 use MB\Support\Str;
 use MB\Bitrix\Contracts\UI\Renderable;
 use MB\Bitrix\UI\Base\Field\AbstractBaseField;
@@ -36,13 +35,16 @@ use ReflectionClass;
 class FieldFactory
 {
     /**
-     * @var Renderable[]
+     * @var string[] FQCN of field classes
      */
     protected array $classList;
 
     public function __construct(protected Container $container)
     {
-        $this->classList = Filesystem::classFinder()->extends(__DIR__, AbstractBaseField::class);
+        $this->classList = array_column(
+            Filesystem::classFinder()->extends(__DIR__, AbstractBaseField::class),
+            'class'
+        );
     }
     
     public function create(string $type, string $name, ...$args): ?AbstractBaseField

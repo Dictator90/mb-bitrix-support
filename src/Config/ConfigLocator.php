@@ -2,7 +2,7 @@
 
 namespace MB\Core\Config;
 
-use MB\Core\Support\Finder\ClassFinder;
+use MB\Bitrix\Filesystem\Filesystem;
 
 class ConfigLocator
 {
@@ -10,10 +10,9 @@ class ConfigLocator
 	{
         $moduleManager = module($moduleId);
 
-        $result = ClassFinder::findExtended(
-            $moduleManager->getLibPath(),
-            $moduleManager->getNamespace(),
-            Entity::getClassName()
+        $result = array_column(
+            Filesystem::classFinder()->extends($moduleManager->getLibPath(), Entity::getClassName()),
+            'class'
         );
 
         return $result[0];
@@ -21,10 +20,9 @@ class ConfigLocator
 
     public static function getConfigByPath(string $path, string $baseName)
     {
-        $result = ClassFinder::findExtended(
-            $path,
-            $baseName,
-            Entity::getClassName()
+        $result = array_column(
+            Filesystem::classFinder()->extends($path, Entity::getClassName()),
+            'class'
         );
 
         return $result[0];

@@ -213,7 +213,7 @@ class MyHlBlock extends Base
 #### Внутренние операции
 
 - **`createTable(?array $classList = null): Result`**
-  - если `$classList` не задан, через `Finder\ClassFinder::findExtended()` ищет все классы модуля, наследующие `Base`;
+  - если `$classList` не задан, через `Filesystem::classFinder()->extends()` ищет все классы модуля, наследующие `Base`;
   - для каждого класса:
     - если блок уже существует (`isExist()`) — вызывает `refresh()` для обновления полей;
     - иначе — вызывает `createTable()` для первичного создания;

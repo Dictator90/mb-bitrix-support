@@ -5,6 +5,7 @@ namespace MB\Bitrix\Agent;
 use Bitrix\Main\NotImplementedException;
 use Bitrix\Main\SystemException;
 use CAgent;
+use MB\Bitrix\Filesystem\Filesystem;
 use MB\Bitrix\Migration\BaseEntityManager;
 use MB\Bitrix\Migration\Result;
 use MB\Support\Arr;
@@ -50,11 +51,9 @@ class AgentManager extends BaseEntityManager
     {
         $result = new Result();
         try {
-            //$classList = Filesystem::classFinder()->extends($this->module->getLibPath(), $this->module->getNamespace());
-            $classList = ClassFinder::findExtended(
-                $this->module->getLibPath(),
-                $this->module->getNamespace(),
-                $this->getEntityClass()
+            $classList = array_column(
+                Filesystem::classFinder()->extends($this->module->getLibPath(), $this->getEntityClass()),
+                'class'
             );
 
             $agentList = $this->getClassAgents($classList);
