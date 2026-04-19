@@ -2,16 +2,24 @@
 namespace MB\Bitrix\Foundation;
 
 use Bitrix\Main\Application as BitrixApplication;
+use MB\Bitrix\Config\ArrayRepository as ConfigArrayRepository;
+use MB\Bitrix\Contracts\Config\Repository as ConfigRepositoryContract;
 use MB\Bitrix\ServiceProvider as BitrixServiceProvider;
 use MB\Bitrix\Contracts\Module\Entity as ModuleEntityContract;
+use MB\Bitrix\File\ServiceProvider as FileServiceProvider;
 use MB\Bitrix\Filesystem\ServiceProvider as FilesystemServiceProvider;
+use MB\Bitrix\Migration\Facade as MigrationFacade;
 use MB\Bitrix\Migration\ServiceProvider as MigrationServiceProvider;
 use MB\Bitrix\Logger\ServiceProvider as LoggerServiceProvider;
+use MB\Bitrix\Logger\ModuleLoggerFactory;
 use MB\Bitrix\Module\Entity as ModuleEntity;
+use MB\Bitrix\Module\ModuleContainer;
 use MB\Bitrix\Module\ServiceProvider as ModuleServiceProvider;
 use MB\Bitrix\Page\Asset;
 use MB\Bitrix\Page\ServiceProvider as AssetServiceProvider;
 use MB\Bitrix\Traits\BitrixEventsObservableTrait;
+use MB\Container\AliasRegistry;
+use MB\Container\BindingRegistry;
 use MB\Container\Container;
 use MB\Container\Exceptions\ContainerException;
 use MB\Container\Exceptions\NotFoundException;
@@ -127,6 +135,8 @@ class Application extends Container
         static::setInstance($this);
 
         $this->instance('app', $this);
+
+        $this->instance('config', new ConfigArrayRepository());
     }
 
     /**
@@ -138,6 +148,7 @@ class Application extends Container
     {
         $this->register(AssetServiceProvider::class);
         $this->register(FilesystemServiceProvider::class);
+        $this->register(FileServiceProvider::class);
         $this->register(MigrationServiceProvider::class);
         $this->register(BitrixServiceProvider::class);
         $this->register(LoggerServiceProvider::class);
@@ -190,20 +201,46 @@ class Application extends Container
 
     }
 
+    public function getBasePath(): ?string
+    {
+        return $this->basePath;
+    }
+
+    /**
+     * Set the application base path and load PHP config files from "{$basePath}/config/*.php" into the config repository.
+     */
+    public function setBasePath(string $path): static
+    {
+        $this->basePath = rtrim($path, "/\\");
+
+        // Instance bindings are not visible to has(); always resolve config if registered.
+        try {
+            $config = $this->make('config');
+            if ($config instanceof ConfigArrayRepository) {
+                $config->loadFromDirectory($this->basePath . DIRECTORY_SEPARATOR . 'config');
+            }
+        } catch (NotFoundException) {
+            // No config binding (non-standard Application subclass).
+        }
+
+        return $this;
+    }
+
     public function registerModule($moduleId): void
     {
-        $this->singleton("$moduleId:module", fn (Application $app) => $app->makeWith(ModuleEntityContract::class, ['moduleId' => $moduleId]));
+        $this->singleton("$moduleId:module", fn (Application $app) => $app->makeWith(ModuleEntityContract::class, ['id' => $moduleId]));
         $this->bind("$moduleId:config", fn (Application $app) => $app->make("$moduleId:module")->getConfig(''));
-        $this->singleton("$moduleId:migration", fn (Application $app) => $app->makeWith(ModuleEntityContract::class, ['module' => "$moduleId:module"]));
-        $this->singleton("$moduleId:logger", fn (Application $app) => $app->makeWith('logger', ['moduleId' => $moduleId]));
+        $this->singleton("$moduleId:migration", fn (Application $app) => new MigrationFacade($app->make("$moduleId:module")));
+        $this->singleton(
+            "$moduleId:logger",
+            fn (Application $app) => $app->make(ModuleLoggerFactory::class)->make($moduleId)
+        );
         //$this->singleton("$moduleId:admin.page", fn (Application $app) => new PageManager($app->make("$moduleId:module")));
     }
 
     /**
-     * @template T of object
-     * @param class-string<T>|string $abstract
+     * @param class-string|non-falsy-string $abstract
      * @param array<string, mixed> $parameters
-     * @return T
      */
     public function make(string $abstract, array $parameters = []): mixed
     {
@@ -223,6 +260,46 @@ class Application extends Container
         $instance = parent::make($abstract);
         $this->resolved[$abstract] = true;
         return $instance;
+    }
+
+    private static ?\ReflectionProperty $containerAliasesReflection = null;
+
+    private static ?\ReflectionProperty $containerBindingsReflection = null;
+
+    private function aliasesRegistry(): AliasRegistry
+    {
+        self::$containerAliasesReflection ??= (function (): \ReflectionProperty {
+            $p = (new ReflectionClass(Container::class))->getProperty('aliases');
+            $p->setAccessible(true);
+
+            return $p;
+        })();
+
+        /** @var AliasRegistry */
+        return self::$containerAliasesReflection->getValue($this);
+    }
+
+    private function bindingsRegistry(): BindingRegistry
+    {
+        self::$containerBindingsReflection ??= (function (): \ReflectionProperty {
+            $p = (new ReflectionClass(Container::class))->getProperty('bindings');
+            $p->setAccessible(true);
+
+            return $p;
+        })();
+
+        /** @var BindingRegistry */
+        return self::$containerBindingsReflection->getValue($this);
+    }
+
+    protected function resolveAliasName(string $abstract): string
+    {
+        return $this->aliasesRegistry()->resolve($abstract);
+    }
+
+    protected function getConcreteBinding(string $resolved): string|callable|null
+    {
+        return $this->bindingsRegistry()->getConcrete($resolved);
     }
 
     /**
@@ -274,12 +351,8 @@ class Application extends Container
     }
 
     /**
-     * Create an instance with the given parameters.
-     *
-     * @template T of object
-     * @param class-string<T>|string $abstract
+     * @param class-string|non-falsy-string $abstract
      * @param array<string, mixed> $parameters
-     * @return T
      */
     public function makeWith(string $abstract, array $parameters = []): mixed
     {
@@ -338,18 +411,22 @@ class Application extends Container
         static::$instance = $container instanceof self ? $container : null;
     }
 
-    public static function getInstance(): static
+    public static function getInstance(): Application
     {
         if (static::$instance === null) {
             throw new \RuntimeException('KernelApplication instance has not been set.');
         }
+
         return static::$instance;
     }
 
+    public function container(string $moduleId): ModuleContainer
+    {
+        return new ModuleContainer($this, $moduleId);
+    }
+
     /**
-     * @template T of object
-     * @param class-string<T>|string $id
-     * @return T
+     * @param class-string|non-falsy-string $id
      */
     public function get(string $id): mixed
     {
@@ -413,6 +490,7 @@ class Application extends Container
         foreach ([
             'app' => [self::class, Container::class, ContainerInterface::class],
             'asset' => [Asset::class],
+            'config' => [ConfigRepositoryContract::class, ConfigArrayRepository::class],
             'module' => [ModuleEntity::class, ModuleEntityContract::class],
         ] as $key => $aliases) {
             foreach ($aliases as $alias) {

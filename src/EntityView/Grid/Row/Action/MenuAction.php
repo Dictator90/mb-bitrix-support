@@ -10,13 +10,19 @@ use Bitrix\Main\Grid\Row;
 class MenuAction extends Row\Action\MenuAction
 {
 
+    /**
+     * @internal Extend in project code for real admin UX; empty default keeps grid render valid.
+     */
     protected function getText(): string
     {
-        // TODO: Implement getText() method.
+        return '';
     }
 
+    /**
+     * @return array<int, array<string, mixed>>
+     */
     protected function getMenu(): array
     {
-        // TODO: Implement getMenu() method.
+        return [];
     }
 }

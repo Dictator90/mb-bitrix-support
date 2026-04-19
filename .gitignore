@@ -4,3 +4,7 @@
 /.idea/
 /.phpunit.result.cache
 /.git
+/tests/.runtime/sqlite/*.sqlite
+/tests/.runtime/sqlite-phpunit/
+/.phpunit.cache
+/.cursor

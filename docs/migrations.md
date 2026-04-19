@@ -1,6 +1,28 @@
 ## Миграции и менеджеры сущностей
 
-Пакет `mb/bitrix-support` не навязывает конкретный формат файлов миграций, а предоставляет **базовую инфраструктуру** для описания операций над сущностями модуля:
+Пакет `mb4it/bitrix-support` не навязывает конкретный формат файлов миграций, а предоставляет **базовую инфраструктуру** для описания операций над сущностями модуля:
+
+### Фасад `MB\Bitrix\Migration\Facade`
+
+- Контракт `Contracts\Migration\Facade` требует **`up()`** / **`down()`** — они делегируют в **`upAll()`** / **`downAll()`**.
+- Фасад — это orchestration-слой для lifecycle модуля, а не версия миграций в стиле Laravel: по умолчанию он выполняет pipeline **file → storage → event** при `upAll()` и **event → storage → file** при `downAll()`.
+- Каждый шаг возвращает собственный `MB\Bitrix\Migration\Result`; фасад складывает их в `Result::getData()` по ключам шага и одновременно агрегирует все ошибки в верхний `Result`.
+- Ключ **`agent`** не входит в default pipeline намеренно. Агентов можно запускать отдельно через **`upAgents()`** / **`downAgents()`**, но для прод-кода по-прежнему предпочтителен прямой вызов `AgentManager`.
+- Сущность **`Storage`** в `upAll`/`downAll` обходит классы модуля, наследующие `MB\Bitrix\Storage\Base`, и вызывает их `migrate()` / удаляет таблицы в `down` — опирается на `MB\Bitrix\Migration\Facades\Storage` и ядро Bitrix ORM.
+- Все migration-сущности обязаны реализовывать контракт `MB\Bitrix\Contracts\Migration\Entity`; базовый `MB\Bitrix\Migration\BaseEntity` уже реализует контракт и задаёт единый shape для `check()/up()/down()`.
+- Файловый шаг `MB\Bitrix\Migration\Entities\File` читает `ModuleEntity::getInstallConfig()` и трактует его как declarative install-manifest. Неизвестные action больше не игнорируются: шаг возвращает ошибку в `Result`, что делает install/uninstall предсказуемым для модуля.
+
+### Тестирование
+
+- `composer test` — быстрые unit-тесты пакета с минимальными Bitrix-stubs.
+- `composer test:integration` — отдельный smoke-контур на реальных классах `Bitrix\Main\*` из `avshatalov48/bitrix-core-business`.
+- По умолчанию integration bootstrap поднимает реальные D7-типы без полного `prolog_before.php`: этого достаточно для smoke-тестов migration-слоя и не требует поднятой БД.
+- Полный `prolog_before.php` доступен как opt-in режим через `BITRIX_INTEGRATION_USE_PROLOG=1`; для него уже нужен рабочий Bitrix runtime с доступной MySQL/MariaDB.
+- В integration bootstrap подавляются `E_DEPRECATED` от самого upstream-ядра Bitrix на PHP 8.4, чтобы smoke-тесты оставались сигналом о совместимости пакета, а не о legacy-сигнатурах в vendor-core.
+
+Подробности изменений контракта при необходимости смотрите в **`CHANGELOG.md`** в корне репозитория.
+
+---
 
 - абстрактный менеджер `MB\Bitrix\Migration\BaseEntityManager`;
 - конкретные менеджеры:

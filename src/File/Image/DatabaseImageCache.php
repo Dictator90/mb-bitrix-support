@@ -3,6 +3,7 @@
 namespace MB\Bitrix\File\Image;
 
 use Bitrix\Main;
+use MB\Bitrix\Contracts\File\FileServiceContract;
 use MB\Bitrix\Contracts\File\ImageCache;
 use MB\Bitrix\File\FileService;
 use MB\Bitrix\File\Image\Storage\CacheTable;
@@ -14,11 +15,14 @@ use MB\Bitrix\Filesystem\Filesystem;
  */
 class DatabaseImageCache implements ImageCache
 {
+    private FileServiceContract $files;
+
     /**
      * Конструктор инициализирует таблицу кэша
      */
-    public function __construct()
+    public function __construct(?FileServiceContract $files = null)
     {
+        $this->files = $files ?? FileService::resolve();
         $this->initTable();
     }
 
@@ -79,8 +83,8 @@ class DatabaseImageCache implements ImageCache
     private function fileExists(int|array $file): bool
     {
         $filePath = is_int($file)
-            ? FileService::getFilePath($file)
-            : FileService::getFilePathFromArray($file);
+            ? $this->files->getFilePath($file)
+            : $this->files->getFilePathFromArray($file);
         if ($filePath === null) {
             return false;
         }

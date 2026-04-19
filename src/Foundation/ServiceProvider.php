@@ -3,7 +3,6 @@
 namespace MB\Bitrix\Foundation;
 
 use Closure;
-use MB\Container\Container;
 use MB\Container\Exceptions\ContainerException;
 
 /**
@@ -14,10 +13,8 @@ abstract class ServiceProvider
 {
     /**
      * The application instance.
-     *
-     * @var Container
      */
-    protected $app;
+    protected Application $app;
 
     /**
      * All of the registered booting callbacks.
@@ -51,12 +48,7 @@ abstract class ServiceProvider
      */
     public static $publishGroups = [];
 
-    /**
-     * Create a new service provider instance.
-     *
-     * @param Container $app
-     */
-    public function __construct(Container $app)
+    public function __construct(Application $app)
     {
         $this->app = $app;
     }
@@ -171,11 +163,11 @@ abstract class ServiceProvider
      */
     public static function pathsToPublish($provider = null, $group = null): array
     {
-        if (!is_null($paths = static::pathsForProviderOrGroup($provider, $group))) {
-            return $paths;
+        if ($provider !== null || $group !== null) {
+            return static::pathsForProviderOrGroup($provider, $group);
         }
 
-        return (collect(static::$publishes))->reduce(function ($paths, $p) {
+        return (collect(static::$publishes))->reduce(function (array $paths, $p): array {
             return array_merge($paths, $p);
         }, []);
     }

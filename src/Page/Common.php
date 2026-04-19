@@ -6,7 +6,7 @@ use Bitrix\Main\Context;
 use Bitrix\Main\Page;
 use Bitrix\Main\Request;
 use Bitrix\Main\SiteTable;
-use MB\Core\Support\Traits\SingletonTrait;
+use MB\Bitrix\Traits\SingletonTrait;
 
 class Common
 {

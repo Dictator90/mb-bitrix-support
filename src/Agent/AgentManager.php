@@ -51,10 +51,13 @@ class AgentManager extends BaseEntityManager
     {
         $result = new Result();
         try {
-            $classList = array_column(
-                Filesystem::classFinder()->extends($this->module->getLibPath(), $this->getEntityClass()),
-                'class'
-            );
+            $libPath = $this->module->getLibPath();
+            $classList = $libPath !== null
+                ? array_column(
+                    Filesystem::classFinder()->extends($libPath, $this->getEntityClass()),
+                    'class'
+                )
+                : [];
 
             $agentList = $this->getClassAgents($classList);
             $registeredList = $this->getRegisteredAgents(true);

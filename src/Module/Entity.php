@@ -6,15 +6,12 @@ use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager as BitrixModuleManager;
-use MB\Bitrix\Contracts\Migration\Facade;
 use MB\Core\Config\ConfigLocator;
-use MB\Core\Config\ConfigManager;
 use MB\Bitrix\Contracts\Module\Entity as ModuleEntityContract;
 use MB\Bitrix\Contracts\Config\Entity as ConfigEntityContract;
 use MB\Bitrix\Config\Entity as ConfigEntity;
 use MB\Bitrix\Migration\Facade as MigrationFacade;
-use MB\Core\Foundation\KernelApplication;
-use MB\Core\Page\Asset;
+use MB\Bitrix\Page\Asset;
 use MB\Core\Settings\Page\PageManager;
 use MB\Bitrix\Support\Facades\Filesystem as Fs;
 use MB\Support\Str;
@@ -36,13 +33,13 @@ class Entity implements ModuleEntityContract
     /** @var string|null Абсолютный путь к директории модуля */
     protected ?string $modulePath;
 
-    /** @var mixed Класс конфигурации модуля */
-    protected $configClass = null;
+    /** @var class-string<ConfigEntityContract> */
+    protected string $configClass = ConfigEntity::class;
 
     /** @var mixed Конфигурация установки модуля */
     protected $installConfig = null;
 
-    protected Facade|null $migrationFacade = null;
+    protected MigrationFacade|null $migrationFacade = null;
 
     protected array $config = [];
 
@@ -86,11 +83,13 @@ class Entity implements ModuleEntityContract
     /**
      * Возвращает абсолютный путь к директории lib модуля
      *
-     * @return string Путь к директории lib
+     * @return string|null Путь к директории lib или null, если путь к модулю неизвестен
      */
-    public function getLibPath(): string
+    public function getLibPath(): ?string
     {
-        return $this->getPath() . '/lib';
+        $path = $this->getPath();
+
+        return $path !== null ? $path . '/lib' : null;
     }
 
     /**
@@ -113,17 +112,16 @@ class Entity implements ModuleEntityContract
      */
     public function getConfigClass(): string
     {
-        return ConfigEntity::class;
+        return $this->configClass;
     }
 
     /**
      * @param string $siteId
-     * @return Entity|null
      */
     public function getConfig(string $siteId = ''): ?ConfigEntity
     {
         $siteKey = empty($siteId) ? 'none' : $siteId;
-        if (!$this->config[$siteKey]) {
+        if (empty($this->config[$siteKey])) {
             $this->config[$siteKey] = new ($this->getConfigClass())($this, $siteId);
         }
 
@@ -133,11 +131,11 @@ class Entity implements ModuleEntityContract
     /**
      * Возвращает фасад для работы с миграциями модуля
      *
-     * @return Facade Фасад миграций
+     * @return MigrationFacade Фасад миграций
      */
     public function getMigrationFacade(): MigrationFacade
     {
-        //return app()->container($this->id)->migrationFacade();
+        return $this->migrationFacade ??= app()->container($this->id)->migrationFacade();
     }
 
     public function getPageManager(): PageManager
@@ -223,16 +221,17 @@ class Entity implements ModuleEntityContract
 
     protected function fillConfig(): void
     {
-        $this->configClass =
-            ConfigLocator::getConfigByPath($this->getLibPath(), $this->getNamespace())
-                ?: Entity::class;
+        $libPath = $this->getLibPath();
+        $this->configClass = $libPath !== null
+            ? (ConfigLocator::getConfigByPath($libPath, $this->getNamespace()) ?: ConfigEntity::class)
+            : ConfigEntity::class;
     }
 
     protected function fillInstallConfig()
     {
         $intallJson = $this->getPath() . '/install/config.json';
         if ($this->id !== 'mb.core' && !Fs::isFile($intallJson)) {
-            $intallJson = ModuleManager::get('mb.core')->getPath() . '/install/base.config.json';
+            $intallJson = (new self('mb.core'))->getPath() . '/install/base.config.json';
         }
 
         if (Fs::isFile($intallJson)) {

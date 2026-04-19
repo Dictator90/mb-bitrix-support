@@ -1,6 +1,6 @@
 ## Работа с файлами и изображениями
 
-Этот раздел описывает слой `MB\Bitrix\File` и `MB\Bitrix\File\Image` — высокоуровневую обёртку над стандартным API Bitrix (`CFile`, `Bitrix\Main\File\Image` и др.) с дополнительными возможностями:
+Этот раздел описывает слой `MB\Bitrix\File` и `MB\Bitrix\File\Image` — высокоуровневую обёртку над **D7 API** (`Bitrix\Main\FileTable`, `Bitrix\Main\File\Image`, `Bitrix\Main\Event` и т.д.). Поведение согласуется с контрактом legacy [`CFile`](https://dev.1c-bitrix.ru/api_help/main/reference/cfile/index.php) (официально D7-аналог файловой таблицы — `FileTable`). Дополнительные возможности пакета:
 
 - унифицированная нормализация входных данных (включая `$_FILES`, ID файла и временные пути);
 - валидация и поиск дубликатов файлов;
@@ -56,9 +56,25 @@ $files = Fs::files($dir, true); // рекурсивный список файл�
 Файл: `src/File/FileService.php`  
 Пространство имён: `MB\Bitrix\File`
 
-`FileService` — основной фасад для работы с таблицей `b_file` и физическими файлами.
+`FileService` — основной фасад для работы с таблицей `b_file` и физическими файлами на **ORM D7** (`FileTable`, `FileHashTable`, `FileDuplicateTable`). Мутации (`add` / `update` / `delete`) не используют сырой SQL. События `OnMakeFileArray` и `OnGetFileSRC` вызываются через `Bitrix\Main\Event`. Корень сайта везде берётся из `Bitrix\Main\Loader::getDocumentRoot()`. Квота диска по-прежнему опирается на `\CDiskQuota` (в публичном ядре нет полноценной D7-замены с той же семантикой) — обёрнуто в приватные методы `FileService` с пометкой `@internal`.
 
-### Сохранение файла: `saveFile()`
+### Рекомендуемый способ: DI и контейнер
+
+- Контракт: `MB\Bitrix\Contracts\File\FileServiceContract`.
+- В `Foundation\Application` регистрируется `MB\Bitrix\File\ServiceProvider`: один экземпляр на ключ **`file.service`** и тот же экземпляр по интерфейсу контракта.
+- Вызов из кода с поднятым ядром:
+
+```php
+$fileId = app('file.service')->save($fileData, 'my_module/files');
+// или полное имя метода:
+$fileId = app(FileServiceContract::class)->saveFile($fileData, 'my_module/files');
+```
+
+- В обработчиках и сервисах лучше **инъецировать** `FileServiceContract` в конструктор.
+- Обратная совместимость: статические вызовы `FileService::saveFile(...)` по-прежнему работают через `__callStatic` → `FileService::resolve()` (контейнер или fallback-экземпляр).
+- Вспомогательные классы `File\Image\*` при необходимости принимают `?FileServiceContract` и иначе используют `FileService::resolve()`.
+
+### Сохранение файла: `saveFile()` / `save()`
 
 ```php
 use MB\Bitrix\File\FileService;
@@ -83,7 +99,7 @@ $fileId = FileService::saveFile(
 - ищет дубликат по размеру и хешу (`findDuplicate()` с использованием `FileDuplicateTable` и `FileHashTable`);
   - если найден — обрабатывает согласно политике (`handleDuplicate()`), как правило, переиспользует существующий файл;
 - сохраняет физический файл (`savePhysicalFile()`);
-- записывает строку в `b_file` (`saveToDatabase()`) и возвращает новый `FILE_ID`.
+- создаёт запись через `FileTable::add()` (`saveToDatabase()`) и возвращает новый `FILE_ID`.
 
 Возвращаемое значение:  
 `int|null` — ID файла или `null`, если сохранение не удалось / имя пустое.
@@ -120,13 +136,13 @@ foreach ($results as $key => $result) {
 ### Получение данных файла(ов)
 
 - **`getFileData(int $fileId): ?array`**  
-  Возвращает обогащённые данные по одному файлу с кешированием в статическом свойстве трейта `RememberCachable`.
+  Возвращает обогащённые данные по одному файлу; кеш запроса в рамках PHP-процесса — приватный массив экземпляра `FileService` (ключ = ID файла, значение `null` если записи нет). У синглтона из контейнера кеш общий на процесс.
 
 - **`getFilesData(array $fileIds): array`**  
   Загружает несколько файлов за один запрос:
-  - проверяет кеш и собирает IDs, которых нет в кеше;
-  - делает запрос `FileTable::query()->setSelect(['*', 'HASH.*'])->whereIn('ID', $idsToFetch)`;  
-  - обогащает данные (`enrichFileData()`), кладёт в кеш и возвращает ассоциативный массив `[$id => $fileArray]`.
+  - проверяет кеш и собирает ID, которых нет в кеше;
+  - делает запрос `FileTable::query()->setSelect(['*', 'HASH.*'])->whereIn('ID', $idsToFetch)`;
+  - обогащает данные (`enrichFileData()`), кладёт в кеш и возвращает ассоциативный массив `[$id => ?array]` (для запрошенного, но отсутствующего в БД ID — значение `null`).
 
 - **`getFilesByFilter(array $filter = [], array $order = ['ID' => 'DESC'], int $limit = 50, int $offset = 0)`**  
   Возвращает `Main\ORM\Query\Result` по произвольному фильтру.
@@ -150,15 +166,15 @@ while ($file = $result->fetch()) {
 ### Обновление и удаление
 
 - **`updateDescription(int $fileId, string $description): bool`**  
-  Обновляет поле `DESCRIPTION` напрямую через SQL и сбрасывает кеш файла.
+  Обновляет `DESCRIPTION` и `TIMESTAMP_X` через `FileTable::update()`, сбрасывает кеш файла.
 
 - **`deleteFile(int $fileId): bool`**
 
   - загружает данные файла;
   - удаляет физический файл (`deletePhysicalFile()`);
   - помечает запись в `FileDuplicateTable` как удалённую и удаляет хеш из `FileHashTable`;
-  - удаляет строку из `b_file`;
-  - очищает кеш и обновляет квоту (`CDiskQuota::updateDiskQuota()`), если включена.
+  - удаляет строку через `FileTable::delete()`;
+  - очищает кеш и при включённой квоте вызывает обновление учёта через внутренний вызов `CDiskQuota`.
 
 ### Работа с путями
 
@@ -203,7 +219,7 @@ $fileArray = FileService::makeFileArray($_FILES['PHOTO']);
 
 ### Низкоуровневый класс `Image`
 
-Файл: `src/File/Image.php`  
+Файл: `src/File/Image/Image.php`  
 Назначение: быстро выполнить одну или несколько операций `Spatie\Image\Image` без кэширования и без сохранения в Bitrix.
 
 ```php

@@ -1,25 +1,27 @@
 <?php
 
-namespace MB\Core\Migration;
+declare(strict_types=1);
 
-use Bitrix\Tasks\Access\Install\Migration;
-use MB\Core;
-use MB\Core\Migration\Entity\Storage\RegularStorageManager;
+namespace MB\Bitrix\Migration\Entities;
 
-class Storage extends Reference\AbstractMigration
+use MB\Bitrix\Migration\BaseEntity;
+use MB\Bitrix\Migration\Result;
+use MB\Bitrix\Migration\StorageEntityManager;
+
+class Storage extends BaseEntity
 {
-	public function check(): bool
+    public function check(): bool
     {
         return true;
-	}
+    }
 
     public function up(): Result
     {
-        return RegularStorageManager::create($this->module)->update();
+        return StorageEntityManager::create($this->module)->update();
     }
 
     public function down(): Result
     {
-        return RegularStorageManager::create($this->module)->deleteAll();
+        return StorageEntityManager::create($this->module)->deleteAll();
     }
 }

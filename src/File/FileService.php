@@ -4,19 +4,24 @@ namespace MB\Bitrix\File;
 
 use Bitrix\Main;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\Event;
+use Bitrix\Main\EventResult;
 use Bitrix\Main\File\Image;
 use Bitrix\Main\File\Internal\FileDuplicateTable;
 use Bitrix\Main\File\Internal\FileHashTable;
 use Bitrix\Main\FileTable;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Security;
+use Bitrix\Main\Type\DateTime as BitrixDateTime;
 use Bitrix\Main\Web;
+use MB\Bitrix\Contracts\File\FileServiceContract;
+use MB\Bitrix\Foundation\Application;
 use MB\Bitrix\Filesystem\Filesystem;
-use MB\Bitrix\Traits\RememberCachable;
 
-class FileService
+class FileService implements FileServiceContract
 {
-    use RememberCachable;
+    /** @var array<int, array|null> строка b_file + обогащение, ключ — ID файла */
+    private array $fileDataCache = [];
 
     protected const CACHE_DIR = 'b_file';
     protected const UPLOAD_DIR = 'upload';
@@ -24,49 +29,62 @@ class FileService
     /**
      * Сохраняет файл в системе (аналог CFile::SaveFile)
      */
-    public static function saveFile(array $fileData, string $savePath, bool $forceRandom = false, bool $skipExtension = false, string $dirAdd = ''): ?int
+    public function saveFile(array $fileData, string $savePath, bool $forceRandom = false, bool $skipExtension = false, string $dirAdd = ''): ?int
     {
-        $fileData = self::normalizeFileData($fileData);
+        $fileData = $this->normalizeFileData($fileData);
 
         if (empty($fileData['name'])) {
             return null;
         }
 
         // Валидация файла
-        if ($error = self::validateFile($fileData)) {
+        if ($error = $this->validateFile($fileData)) {
             throw new Main\SystemException($error);
         }
 
         // Подготовка данных файла
-        $preparedData = self::prepareFileData($fileData, $savePath, $forceRandom, $skipExtension, $dirAdd);
+        $preparedData = $this->prepareFileData($fileData, $savePath, $forceRandom, $skipExtension, $dirAdd);
         // Проверка дубликатов
-        if ($duplicate = self::findDuplicate($preparedData['FILE_SIZE'], $preparedData['FILE_HASH'])) {
-            return self::handleDuplicate($duplicate, $preparedData);
+        if ($duplicate = $this->findDuplicate($preparedData['FILE_SIZE'], $preparedData['FILE_HASH'])) {
+            return $this->handleDuplicate($duplicate, $preparedData);
         }
 
         // Сохранение физического файла
-        if (!self::savePhysicalFile($preparedData)) {
+        if (!$this->savePhysicalFile($preparedData)) {
             return null;
         }
 
         // Сохранение в БД
-        return self::saveToDatabase($preparedData);
+        return $this->saveToDatabase($preparedData);
+    }
+
+    /**
+     * Короткий алиас {@see saveFile()} — удобно для {@code app('file.service')->save(...)}.
+     */
+    public function save(
+        array $fileData,
+        string $savePath,
+        bool $forceRandom = false,
+        bool $skipExtension = false,
+        string $dirAdd = '',
+    ): ?int {
+        return $this->saveFile($fileData, $savePath, $forceRandom, $skipExtension, $dirAdd);
     }
 
     /**
      * Сохраняет несколько файлов за одну операцию
      */
-    public static function saveFiles(array $filesData, string $savePath, bool $forceRandom = false): array
+    public function saveFiles(array $filesData, string $savePath, bool $forceRandom = false): array
     {
         $results = [];
 
         foreach ($filesData as $key => $fileData) {
             try {
-                $fileId = self::saveFile($fileData, $savePath, $forceRandom);
+                $fileId = $this->saveFile($fileData, $savePath, $forceRandom);
                 $results[$key] = [
                     'success' => true,
                     'fileId' => $fileId,
-                    'fileData' => $fileId ? self::getFileData($fileId) : null
+                    'fileData' => $fileId ? $this->getFileData($fileId) : null
                 ];
             } catch (\Exception $e) {
                 $results[$key] = [
@@ -82,22 +100,27 @@ class FileService
     /**
      * Получает данные одного файла
      */
-    public static function getFileData(int $fileId): ?array
+    public function getFileData(int $fileId): ?array
     {
-        return static::remember($fileId, function () use ($fileId) {
-            try {
-                $file = FileTable::getById($fileId)->fetch();
-                self::$cache[$fileId] = $file ? self::enrichFileData($file) : null;
-            } catch (\Exception) {
-                return null;
-            }
-        });
+        if (array_key_exists($fileId, $this->fileDataCache)) {
+            return $this->fileDataCache[$fileId];
+        }
+
+        try {
+            $file = FileTable::getById($fileId)->fetch();
+            $enriched = $file ? $this->enrichFileData($file) : null;
+            $this->fileDataCache[$fileId] = $enriched;
+
+            return $enriched;
+        } catch (\Exception) {
+            return null;
+        }
     }
 
     /**
      * Получает данные нескольких файлов за один запрос
      */
-    public static function getFilesData(array $fileIds): array
+    public function getFilesData(array $fileIds): array
     {
         if (empty($fileIds)) {
             return [];
@@ -114,8 +137,8 @@ class FileService
         $idsToFetch = [];
 
         foreach ($fileIds as $id) {
-            if (isset(self::$cache[$id])) {
-                $result[$id] = self::$cache[$id];
+            if (array_key_exists($id, $this->fileDataCache)) {
+                $result[$id] = $this->fileDataCache[$id];
             } else {
                 $idsToFetch[] = $id;
             }
@@ -126,12 +149,18 @@ class FileService
                 $files = FileTable::query()->setSelect(['*', 'HASH.*'])->whereIn('ID', $idsToFetch)->fetchAll();
 
                 foreach ($files as $file) {
-                    $enrichedFile = self::enrichFileData($file);
-                    self::$cache[$file['ID']] = $enrichedFile;
+                    $enrichedFile = $this->enrichFileData($file);
+                    $this->fileDataCache[$file['ID']] = $enrichedFile;
                     $result[$file['ID']] = $enrichedFile;
                 }
-            } catch (\Exception $e) {
-                // Логирование ошибки
+            } catch (\Exception) {
+                // запрошенные ID без ответа БД останутся без ключа до блока ниже
+            }
+
+            foreach ($idsToFetch as $id) {
+                if (!array_key_exists($id, $result)) {
+                    $result[$id] = null;
+                }
             }
         }
 
@@ -141,7 +170,7 @@ class FileService
     /**
      * Получает файлы по фильтру с пагинацией
      */
-    public static function getFilesByFilter(array $filter = [], array $order = ['ID' => 'DESC'], int $limit = 50, int $offset = 0): Main\ORM\Query\Result
+    public function getFilesByFilter(array $filter = [], array $order = ['ID' => 'DESC'], int $limit = 50, int $offset = 0): Main\ORM\Query\Result
     {
         $query = FileTable::query()
             ->setSelect(['*', 'HASH.*'])
@@ -150,7 +179,7 @@ class FileService
             ->setOffset($offset);
 
         if (!empty($filter)) {
-            $query->setFilter(self::normalizeFilter($filter));
+            $query->setFilter($this->normalizeFilter($filter));
         }
 
         return $query->exec();
@@ -159,18 +188,20 @@ class FileService
     /**
      * Обновляет описание файла
      */
-    public static function updateDescription(int $fileId, string $description): bool
+    public function updateDescription(int $fileId, string $description): bool
     {
         try {
-            $connection = Main\Application::getConnection();
-            $sqlHelper = $connection->getSqlHelper();
-            $descriptionEscaped = $sqlHelper->forSql($description, 255);
-            $connection->queryExecute(
-                "UPDATE b_file SET DESCRIPTION='{$descriptionEscaped}', TIMESTAMP_X={$sqlHelper->getCurrentDateTimeFunction()} WHERE ID=" . (int)$fileId
-            );
-            self::cleanCache($fileId);
+            $update = FileTable::update($fileId, [
+                'DESCRIPTION' => $description,
+                'TIMESTAMP_X' => new BitrixDateTime(),
+            ]);
+            if (!$update->isSuccess()) {
+                return false;
+            }
+            $this->cleanCache($fileId);
+
             return true;
-        } catch (\Exception $e) {
+        } catch (\Exception) {
             return false;
         }
     }
@@ -178,26 +209,26 @@ class FileService
     /**
      * Удаляет файл
      */
-    public static function deleteFile(int $fileId): bool
+    public function deleteFile(int $fileId): bool
     {
         try {
-            $file = self::getFileData($fileId);
+            $file = $this->getFileData($fileId);
             if (!$file) {
                 return false;
             }
-            self::deletePhysicalFile($file);
+            $this->deletePhysicalFile($file);
 
             FileDuplicateTable::markDeleted($fileId);
             FileHashTable::delete($fileId);
 
-            $connection = Main\Application::getConnection();
-            $connection->queryExecute("DELETE FROM b_file WHERE ID=" . (int)$fileId);
-
-            self::cleanCache($fileId);
-
-            if (self::isDiskQuotaEnabled()) {
-                \CDiskQuota::updateDiskQuota("file", $file['FILE_SIZE'], "delete");
+            $delete = FileTable::delete($fileId);
+            if (!$delete->isSuccess()) {
+                return false;
             }
+
+            $this->cleanCache($fileId);
+
+            $this->diskQuotaNotifyDelete((int)$file['FILE_SIZE']);
 
             return true;
         } catch (\Exception $e) {
@@ -208,9 +239,9 @@ class FileService
     /**
      * Возвращает абсолютный путь к файлу
      */
-    public static function getFilePath(int $fileId): ?string
+    public function getFilePath(int $fileId): ?string
     {
-        $file = self::getFileData($fileId);
+        $file = $this->getFileData($fileId);
         if (!$file || empty($file['SRC'])) {
             return null;
         }
@@ -220,7 +251,7 @@ class FileService
     /**
      * Возвращает абсолютный путь к файлу из массива данных
      */
-    public static function getFilePathFromArray(array $file): ?string
+    public function getFilePathFromArray(array $file): ?string
     {
         if (isset($file['tmp_name']) && $file['tmp_name'] !== '') {
             try {
@@ -240,7 +271,7 @@ class FileService
             return Main\Loader::getDocumentRoot() . str_replace('//', '/', $relativePath);
         }
         if (!empty($file['ID'])) {
-            return self::getFilePath((int)$file['ID']);
+            return $this->getFilePath((int)$file['ID']);
         }
         return null;
     }
@@ -254,20 +285,20 @@ class FileService
      * @param string|null $site Сайт (не используется напрямую, но может участвовать в событиях).
      * @return array|null Массив с данными файла или null при ошибке.
      */
-    public static function makeFileArray(mixed $file, string $source = '', ?string $site = null): ?array
+    public function makeFileArray(mixed $file, string $source = '', ?string $site = null): ?array
     {
         if ($file === null || $file === '') {
             return ['tmp_name' => '', 'error' => 4]; // UPLOAD_ERR_NO_FILE
         }
 
         if (is_numeric($file)) {
-            $fileData = self::getFileData((int)$file);
+            $fileData = $this->getFileData((int)$file);
             if (!$fileData) {
                 return null;
             }
 
             $uploadDir = Option::get('main', 'upload_dir', 'upload');
-            $filePath = $_SERVER['DOCUMENT_ROOT'] . '/' . $uploadDir . '/' . $fileData['SUBDIR'] . '/' . $fileData['FILE_NAME'];
+            $filePath = $this->getDocumentRoot() . '/' . $uploadDir . '/' . $fileData['SUBDIR'] . '/' . $fileData['FILE_NAME'];
 
             $result = [
                 'name' => $fileData['ORIGINAL_NAME'] ?: $fileData['FILE_NAME'],
@@ -285,7 +316,7 @@ class FileService
                 $keys = array_keys($file['tmp_name']);
                 $key = reset($keys);
 
-                return self::makeFileArray([
+                return $this->makeFileArray([
                     'name' => $file['name'][$key],
                     'type' => $file['type'][$key],
                     'tmp_name' => $file['tmp_name'][$key],
@@ -318,7 +349,7 @@ class FileService
             $result = [
                 'name' => $virtualFile->getName(),
                 'size' => $virtualFile->getSize(),
-                'type' => self::getContentType($path),
+                'type' => $this->getContentType($path),
                 'tmp_name' => $virtualFile->getPath(),
                 'error' => 0,
             ];
@@ -326,12 +357,7 @@ class FileService
             return null;
         }
 
-        foreach (GetModuleEvents('main', 'OnMakeFileArray', true) as $event) {
-            $modified = ExecuteModuleEventEx($event, [$file, $source, $site]);
-            if (is_array($modified)) {
-                $result = array_merge($result, $modified);
-            }
-        }
+        $result = $this->mergeMainEventParameters('OnMakeFileArray', [$file, $source, $site], $result);
 
         if (!empty($result['tmp_name']) && !empty($result['error'])) {
             return null;
@@ -344,14 +370,14 @@ class FileService
      * Вспомогательные методы
      */
 
-    protected static function normalizeFileData(array $fileData): array
+    protected function normalizeFileData(array $fileData): array
     {
         if (isset($fileData['content'])) {
             $fileData['size'] = strlen($fileData['content']);
         }
 
         if (empty($fileData['type'])) {
-            $fileData['type'] = self::getContentType($fileData['tmp_name'] ?? '');
+            $fileData['type'] = $this->getContentType($fileData['tmp_name'] ?? '');
         }
 
         $fileData['ORIGINAL_NAME'] = $fileData['name'] ?? '';
@@ -360,16 +386,15 @@ class FileService
         return $fileData;
     }
 
-    protected static function validateFile(array $fileData): string
+    protected function validateFile(array $fileData): string
     {
-        $fileName = self::transformFileName($fileData['name']);
+        $fileName = $this->transformFileName($fileData['name']);
 
         if (empty($fileName)) {
             return GetMessage("FILE_BAD_FILENAME");
         }
 
-        $io = \CBXVirtualIo::GetInstance();
-        if (!$io->ValidateFilenameString($fileName)) {
+        if (!$this->validateFilenameString($fileName)) {
             return GetMessage("MAIN_BAD_FILENAME1");
         }
 
@@ -377,26 +402,23 @@ class FileService
             return GetMessage("MAIN_BAD_FILENAME_LEN");
         }
 
-        if (\IsFileUnsafe($fileName)) {
+        if ($this->isUnsafeFileName($fileName)) {
             return GetMessage("FILE_BAD_TYPE");
         }
 
-        if (self::isDiskQuotaEnabled()) {
-            $quota = new \CDiskQuota();
-            if (!$quota->checkDiskQuota($fileData)) {
-                return GetMessage("FILE_BAD_QUOTA");
-            }
+        if (!$this->diskQuotaCheckUpload($fileData)) {
+            return GetMessage("FILE_BAD_QUOTA");
         }
 
         return "";
     }
 
-    protected static function prepareFileData(array $fileData, string $savePath, bool $forceRandom, bool $skipExtension, string $dirAdd): array
+    protected function prepareFileData(array $fileData, string $savePath, bool $forceRandom, bool $skipExtension, string $dirAdd): array
     {
-        $fileName = self::transformFileName($fileData['name'], $forceRandom, $skipExtension);
-        $filePath = self::generateFilePath($savePath, $fileName, $forceRandom, $dirAdd);
+        $fileName = $this->transformFileName($fileData['name'], $forceRandom, $skipExtension);
+        $filePath = $this->generateFilePath($savePath, $fileName, $forceRandom, $dirAdd);
 
-        $imageInfo = self::getImageInfo($fileData['tmp_name']);
+        $imageInfo = $this->getImageInfo($fileData['tmp_name']);
 
         return [
             'FILE_NAME' => $fileName,
@@ -408,7 +430,7 @@ class FileService
             'DESCRIPTION' => $fileData['description'] ?? '',
             'WIDTH' => $imageInfo['width'] ?? 0,
             'HEIGHT' => $imageInfo['height'] ?? 0,
-            'FILE_HASH' => self::calculateFileHash($fileData),
+            'FILE_HASH' => $this->calculateFileHash($fileData),
             'EXTERNAL_ID' => $fileData['external_id'] ?? md5(mt_rand()),
             'HANDLER_ID' => $fileData['HANDLER_ID'] ?? '',
             'physical_path' => $filePath['full_path'],
@@ -417,7 +439,7 @@ class FileService
         ];
     }
 
-    protected static function savePhysicalFile(array &$fileData): bool
+    protected function savePhysicalFile(array &$fileData): bool
     {
         $filesystem = Filesystem::instance();
         $path = $fileData['physical_path'];
@@ -447,33 +469,31 @@ class FileService
         }
     }
 
-    protected static function saveToDatabase(array $fileData): int
+    protected function saveToDatabase(array $fileData): int
     {
-        $connection = Main\Application::getConnection();
-        $sqlHelper = $connection->getSqlHelper();
-
-        $dbFields = [
-            'TIMESTAMP_X' => $sqlHelper->getCurrentDateTimeFunction(),
-            'MODULE_ID' => $sqlHelper->convertToDbString($fileData['MODULE_ID'], 50),
-            'HEIGHT' => intval($fileData['HEIGHT']),
-            'WIDTH' => intval($fileData['WIDTH']),
-            'FILE_SIZE' => round(floatval($fileData["FILE_SIZE"])),
-            'CONTENT_TYPE' => $sqlHelper->convertToDbString($fileData['CONTENT_TYPE'], 255),
-            'SUBDIR' => $sqlHelper->convertToDbString($fileData['SUBDIR'], 255),
-            'FILE_NAME' => $sqlHelper->convertToDbString($fileData['FILE_NAME'], 255),
-            'ORIGINAL_NAME' => $sqlHelper->convertToDbString($fileData['ORIGINAL_NAME'], 255),
-            'DESCRIPTION' => $sqlHelper->convertToDbString($fileData['DESCRIPTION'], 255),
-            'HANDLER_ID' => $fileData['HANDLER_ID'] ? $sqlHelper->convertToDbString($fileData['HANDLER_ID'], 50) : 'null',
-            'EXTERNAL_ID' => $fileData['EXTERNAL_ID'] != "" ? $sqlHelper->convertToDbString($fileData['EXTERNAL_ID'], 50) : 'null',
+        $fields = [
+            'TIMESTAMP_X' => new BitrixDateTime(),
+            'MODULE_ID' => (string)$fileData['MODULE_ID'],
+            'HEIGHT' => (int)$fileData['HEIGHT'],
+            'WIDTH' => (int)$fileData['WIDTH'],
+            'FILE_SIZE' => (int)round((float)$fileData['FILE_SIZE']),
+            'CONTENT_TYPE' => (string)$fileData['CONTENT_TYPE'],
+            'SUBDIR' => (string)$fileData['SUBDIR'],
+            'FILE_NAME' => (string)$fileData['FILE_NAME'],
+            'ORIGINAL_NAME' => (string)$fileData['ORIGINAL_NAME'],
+            'DESCRIPTION' => (string)$fileData['DESCRIPTION'],
+            'HANDLER_ID' => ($fileData['HANDLER_ID'] ?? '') !== '' ? (string)$fileData['HANDLER_ID'] : null,
+            'EXTERNAL_ID' => ($fileData['EXTERNAL_ID'] ?? '') !== '' ? (string)$fileData['EXTERNAL_ID'] : null,
         ];
 
-        $fields = implode(',', array_keys($dbFields));
-        $values = implode(',', array_values($dbFields));
+        $add = FileTable::add($fields);
+        if (!$add->isSuccess()) {
+            throw new Main\SystemException(implode('; ', $add->getErrorMessages()));
+        }
 
-        $connection->queryExecute("INSERT INTO b_file ({$fields}) VALUES ($values)");
-        $id = $connection->getInsertedId();
+        $id = (int)$add->getId();
         if ($id <= 0) {
-            throw new \Exception("Unable to insert into b_file");
+            throw new Main\SystemException('Unable to insert into b_file');
         }
 
         if ($id && $fileData['FILE_HASH']) {
@@ -484,18 +504,16 @@ class FileService
             ]);
         }
 
-        self::cleanCache($id);
+        $this->cleanCache($id);
 
-        if (self::isDiskQuotaEnabled()) {
-            \CDiskQuota::updateDiskQuota("file", $fileData['FILE_SIZE'], "insert");
-        }
+        $this->diskQuotaNotifyInsert((int)$fileData['FILE_SIZE']);
 
         return $id;
     }
 
-    protected static function findDuplicate(int $fileSize, string $fileHash): ?array
+    protected function findDuplicate(int $fileSize, string $fileHash): ?array
     {
-        if (empty($fileHash) || !self::isDuplicateControlEnabled()) {
+        if (empty($fileHash) || !$this->isDuplicateControlEnabled()) {
             return null;
         }
 
@@ -508,27 +526,26 @@ class FileService
         ])->fetch();
     }
 
-    protected static function handleDuplicate(array $duplicate, array $preparedData): int
+    protected function handleDuplicate(array $duplicate, array $preparedData): int
     {
         return (int)$duplicate['FILE_ID'];
     }
 
-    protected static function enrichFileData(array $file): array
+    protected function enrichFileData(array $file): array
     {
-        $file['SRC'] = self::getFileSrc($file);
-        $file['FORMATTED_SIZE'] = self::formatSize($file['FILE_SIZE']);
-        $file['IS_IMAGE'] = self::isImage($file['FILE_NAME'], $file['CONTENT_TYPE']);
+        $file['SRC'] = $this->getFileSrc($file);
+        $file['FORMATTED_SIZE'] = $this->formatSize($file['FILE_SIZE']);
+        $file['IS_IMAGE'] = $this->isImage($file['FILE_NAME'], $file['CONTENT_TYPE']);
 
         return $file;
     }
 
-    protected static function getFileSrc(array $file, bool $external = true): string
+    protected function getFileSrc(array $file, bool $external = true): string
     {
         if ($external) {
-            foreach (GetModuleEvents('main', 'OnGetFileSRC', true) as $event) {
-                if ($src = ExecuteModuleEventEx($event, [$file])) {
-                    return $src;
-                }
+            $fromEvent = $this->firstMainEventStringResult('OnGetFileSRC', [$file]);
+            if ($fromEvent !== null && $fromEvent !== '') {
+                return $fromEvent;
             }
         }
 
@@ -538,49 +555,42 @@ class FileService
         return str_replace('//', '/', $src);
     }
 
-    protected static function transformFileName(string $fileName, bool $forceRandom = false, bool $skipExtension = false): string
+    protected function transformFileName(string $fileName, bool $forceRandom = false, bool $skipExtension = false): string
     {
-        $fileName = \GetFileName($fileName);
+        $fileName = $this->extractBaseFileName($fileName);
 
         $originalName = (!$forceRandom && Option::get("main", "save_original_file_name", "N") == "Y");
 
         if ($originalName) {
             if (Option::get("main", "translit_original_file_name", "N") == "Y") {
-                $fileName = \CUtil::translit($fileName, LANGUAGE_ID, [
-                    "max_len" => 1024,
-                    "safe_chars" => ".",
-                    "replace_space" => '-',
-                    "change_case" => false,
-                ]);
+                $fileName = $this->transliterateFileName($fileName);
             }
 
             if (Option::get("main", "convert_original_file_name", "Y") == "Y") {
-                $io = \CBXVirtualIo::GetInstance();
-                $fileName = $io->RandomizeInvalidFilename($fileName);
+                $fileName = $this->randomizeInvalidFilename($fileName);
             }
         }
 
-        if (!$skipExtension && strtolower(\GetFileExtension($fileName)) == "jpe") {
+        if (!$skipExtension && strtolower($this->extractExtension($fileName)) === 'jpe') {
             $fileName = substr($fileName, 0, -4) . ".jpg";
         }
 
-        $fileName = \RemoveScriptExtension($fileName);
+        $fileName = $this->removeScriptExtensionFromName($fileName);
 
         if (!$originalName) {
-            $ext = $skipExtension ? '' : (\GetFileExtension($fileName) ?: '');
-            $fileName = Security\Random::getString(32) . ($ext ? ".{$ext}" : '');
+            $ext = $skipExtension ? '' : ($this->extractExtension($fileName) ?: '');
+            $fileName = Security\Random::getString(32) . ($ext !== '' ? ".{$ext}" : '');
         }
 
         return $fileName;
     }
 
-    protected static function generateFilePath(string $savePath, string $fileName, bool $forceRandom, string $dirAdd): array
+    protected function generateFilePath(string $savePath, string $fileName, bool $forceRandom, string $dirAdd): array
     {
         $uploadDir = Option::get("main", "upload_dir", self::UPLOAD_DIR);
-        $io = \CBXVirtualIo::GetInstance();
 
         if (!$forceRandom && Option::get("main", "save_original_file_name", "N") == "Y") {
-            $subdir = $dirAdd ?: self::generateRandomSubdir();
+            $subdir = $dirAdd ?: $this->generateRandomSubdir();
             $fullPath = $savePath . '/' . $subdir;
         } else {
             $subdir = substr(md5($fileName), 0, 3);
@@ -589,11 +599,11 @@ class FileService
 
         return [
             'subdir' => $fullPath,
-            'full_path' => $_SERVER["DOCUMENT_ROOT"] . '/' . $uploadDir . '/' . $fullPath . '/' . $fileName
+            'full_path' => $this->getDocumentRoot() . '/' . $uploadDir . '/' . $fullPath . '/' . $fileName,
         ];
     }
 
-    protected static function generateRandomSubdir(): string
+    protected function generateRandomSubdir(): string
     {
         $fylesystem = Filesystem::instance();
         $uploadDir = Option::get("main", "upload_dir", self::UPLOAD_DIR);
@@ -608,7 +618,7 @@ class FileService
         }
     }
 
-    protected static function getImageInfo(string $filePath): ?array
+    protected function getImageInfo(string $filePath): ?array
     {
         try {
             $image = new Image($filePath);
@@ -623,9 +633,9 @@ class FileService
         }
     }
 
-    protected static function calculateFileHash(array $fileData): string
+    protected function calculateFileHash(array $fileData): string
     {
-        if (!self::isDuplicateControlEnabled()) {
+        if (!$this->isDuplicateControlEnabled()) {
             return '';
         }
 
@@ -642,19 +652,19 @@ class FileService
         }
     }
 
-    protected static function isDuplicateControlEnabled(): bool
+    protected function isDuplicateControlEnabled(): bool
     {
         return Option::get('main', 'control_file_duplicates', 'N') === 'Y';
     }
 
-    protected static function isDiskQuotaEnabled(): bool
+    protected function isDiskQuotaEnabled(): bool
     {
         return Option::get("main", "disk_space") > 0;
     }
 
-    protected static function cleanCache(int $fileId): void
+    protected function cleanCache(int $fileId): void
     {
-        unset(self::$cache[$fileId]);
+        unset($this->fileDataCache[$fileId]);
 
         if (defined('CACHED_b_file') && CACHED_b_file !== false) {
             $cache = Main\Application::getInstance()->getManagedCache();
@@ -668,7 +678,7 @@ class FileService
         }
     }
 
-    protected static function normalizeFilter(array $filter): array
+    protected function normalizeFilter(array $filter): array
     {
         $normalized = [];
         $allowedFields = [
@@ -685,7 +695,7 @@ class FileService
         return $normalized;
     }
 
-    public static function formatSize(int $size, int $precision = 2): string
+    public function formatSize(int $size, int $precision = 2): string
     {
         $units = ["b", "Kb", "Mb", "Gb", "Tb"];
         $pos = 0;
@@ -699,9 +709,9 @@ class FileService
         return round($size, $precision) . " " . Loc::getMessage("FILE_SIZE_" . $units[$pos]);
     }
 
-    public static function isImage(string $filename, string $mimeType = ''): bool
+    public function isImage(string $filename, string $mimeType = ''): bool
     {
-        $ext = strtolower(\GetFileExtension($filename));
+        $ext = $this->extractExtension($filename);
         $imageExtensions = explode(",", "jpg,bmp,jpeg,jpe,gif,png,webp");
 
         if (in_array($ext, $imageExtensions)) {
@@ -711,7 +721,7 @@ class FileService
         return false;
     }
 
-    public static function getContentType(string $path): string
+    public function getContentType(string $path): string
     {
         if (function_exists("mime_content_type")) {
             return mime_content_type($path) ?: 'unknown';
@@ -721,15 +731,200 @@ class FileService
         return Web\MimeType::getByFileExtension($ext) ?: 'unknown';
     }
 
-    protected static function deletePhysicalFile(array $file): void
+    protected function deletePhysicalFile(array $file): void
     {
         $uploadDir = Option::get("main", "upload_dir", self::UPLOAD_DIR);
-        $filePath = $_SERVER["DOCUMENT_ROOT"] . "/" . $uploadDir . "/" . $file['SUBDIR'] . "/" . $file['FILE_NAME'];
+        $filePath = $this->getDocumentRoot() . '/' . $uploadDir . '/' . $file['SUBDIR'] . '/' . $file['FILE_NAME'];
 
         try {
             Filesystem::instance()->delete($filePath);
         } catch (\Throwable) {
             // Игнорируем ошибки удаления, как и раньше
         }
+    }
+
+    protected function getDocumentRoot(): string
+    {
+        return rtrim(Main\Loader::getDocumentRoot(), "/\\");
+    }
+
+    /**
+     * @param list<mixed> $parameters аргументы события, как у legacy ExecuteModuleEventEx
+     * @param array<string, mixed> $base
+     * @return array<string, mixed>
+     */
+    protected function mergeMainEventParameters(string $eventName, array $parameters, array $base): array
+    {
+        $event = new Event('main', $eventName, $parameters);
+        $event->send();
+
+        foreach ($event->getResults() as $eventResult) {
+            if ($eventResult->getType() === EventResult::ERROR) {
+                continue;
+            }
+            $params = $eventResult->getParameters();
+            if (is_array($params)) {
+                $base = array_merge($base, $params);
+            }
+        }
+
+        return $base;
+    }
+
+    /**
+     * @param list<mixed> $parameters
+     */
+    protected function firstMainEventStringResult(string $eventName, array $parameters): ?string
+    {
+        $event = new Event('main', $eventName, $parameters);
+        $event->send();
+
+        foreach ($event->getResults() as $eventResult) {
+            if ($eventResult->getType() === EventResult::ERROR) {
+                continue;
+            }
+            $params = $eventResult->getParameters();
+            if (is_string($params) && $params !== '') {
+                return $params;
+            }
+            if (is_array($params)) {
+                foreach ($params as $value) {
+                    if (is_string($value) && $value !== '') {
+                        return $value;
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    protected function extractBaseFileName(string $pathOrName): string
+    {
+        $pathOrName = str_replace('\\', '/', $pathOrName);
+
+        return basename($pathOrName);
+    }
+
+    protected function extractExtension(string $fileName): string
+    {
+        $ext = pathinfo($fileName, PATHINFO_EXTENSION);
+
+        return is_string($ext) ? strtolower($ext) : '';
+    }
+
+    protected function transliterateFileName(string $fileName): string
+    {
+        $lang = defined('LANGUAGE_ID') ? (string)constant('LANGUAGE_ID') : 'en';
+        $params = [
+            'max_len' => 1024,
+            'safe_chars' => '.',
+            'replace_space' => '-',
+            'change_case' => false,
+        ];
+        if (class_exists(Main\Text\Transliterator::class)) {
+            return Main\Text\Transliterator::transliterate($fileName, $lang, $params);
+        }
+
+        return $fileName;
+    }
+
+    protected function randomizeInvalidFilename(string $fileName): string
+    {
+        $base = (string)pathinfo($fileName, PATHINFO_FILENAME);
+        $ext = (string)pathinfo($fileName, PATHINFO_EXTENSION);
+        $safe = preg_replace('/[^\p{L}\p{N}._\-]+/u', '_', $base) ?? '';
+        $safe = trim($safe, '._-');
+        if ($safe === '') {
+            $safe = Security\Random::getString(8);
+        }
+
+        return $ext !== '' ? "{$safe}.{$ext}" : $safe;
+    }
+
+    protected function removeScriptExtensionFromName(string $fileName): string
+    {
+        return (string)preg_replace(
+            '/\.(php\d*|phtml|php3|php4|php5|pl|cgi|asp|aspx|jsp|shtml|htaccess)$/i',
+            '',
+            $fileName
+        );
+    }
+
+    protected function validateFilenameString(string $fileName): bool
+    {
+        if ($fileName === '' || $fileName === '.' || $fileName === '..') {
+            return false;
+        }
+
+        return strpbrk($fileName, "<>:\"/\\|?*\x00") === false;
+    }
+
+    protected function isUnsafeFileName(string $fileName): bool
+    {
+        $ext = $this->extractExtension($fileName);
+        $unsafe = ['php', 'php3', 'php4', 'php5', 'phtml', 'phar', 'cgi', 'pl', 'asp', 'aspx', 'jsp', 'htaccess', 'htpasswd'];
+
+        return in_array($ext, $unsafe, true);
+    }
+
+    /**
+     * @internal В публичном API Bitrix по-прежнему используется CDiskQuota; D7-замены с той же семантикой нет.
+     */
+    protected function diskQuotaCheckUpload(array $fileData): bool
+    {
+        if (!$this->isDiskQuotaEnabled()) {
+            return true;
+        }
+
+        return (new \CDiskQuota())->checkDiskQuota($fileData);
+    }
+
+    /**
+     * @internal См. diskQuotaCheckUpload()
+     */
+    protected function diskQuotaNotifyInsert(int $fileSize): void
+    {
+        if (!$this->isDiskQuotaEnabled()) {
+            return;
+        }
+
+        \CDiskQuota::updateDiskQuota('file', $fileSize, 'insert');
+    }
+
+    /**
+     * @internal См. diskQuotaCheckUpload()
+     */
+    protected function diskQuotaNotifyDelete(int $fileSize): void
+    {
+        if (!$this->isDiskQuotaEnabled()) {
+            return;
+        }
+
+        \CDiskQuota::updateDiskQuota('file', $fileSize, 'delete');
+    }
+
+    /**
+     * Resolve from kernel container, or a single fallback when Application is not set.
+     */
+    public static function resolve(): self
+    {
+        try {
+            return Application::getInstance()->make('file.service');
+        } catch (\Throwable) {
+            static $fallback = null;
+
+            return $fallback ??= new self();
+        }
+    }
+
+    /**
+     * Back-compat: FileService::method(...) delegates to {@see resolve()}.
+     *
+     * @param list<mixed> $arguments
+     */
+    public static function __callStatic(string $name, array $arguments): mixed
+    {
+        return self::resolve()->$name(...$arguments);
     }
 }

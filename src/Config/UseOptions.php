@@ -14,7 +14,7 @@ trait UseOptions
         $optionValue = Option::get($this->module->getId(), $name, $default, $siteId);
 
         if (Str::position($optionValue, static::$serializedOptionPrefix) === 0) {
-            $truncatedValue = Str::substring(
+            $truncatedValue = Str::substr(
                 $optionValue,
                 Str::length(static::$serializedOptionPrefix)
             );
@@ -47,7 +47,7 @@ trait UseOptions
         $optionValues = Option::getForModule($this->module->getId(), $siteId);
         foreach ($optionValues as $optionName => $optionValue) {
             if (Str::position($optionValue, static::$serializedOptionPrefix) === 0) {
-                $truncatedValue = Str::substring(
+                $truncatedValue = Str::substr(
                     $optionValue,
                     Str::length(static::$serializedOptionPrefix)
                 );

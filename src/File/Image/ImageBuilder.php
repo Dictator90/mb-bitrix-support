@@ -3,6 +3,7 @@
 namespace MB\Bitrix\File\Image;
 
 use Bitrix\Main\SystemException;
+use MB\Bitrix\Contracts\File\FileServiceContract;
 use MB\Bitrix\File\FileService;
 use MB\Bitrix\File\Image\Operations\SpatieImageOperation;
 use Spatie\ImageOptimizer\OptimizerChain;
@@ -51,15 +52,17 @@ class ImageBuilder
     private ?string $format = null;
     private int $quality = 95;
     private ImageProcessor $processor;
+    private FileServiceContract $files;
 
     /**
      * @param int $fileId ID файла в Битрикс (b_file.ID)
      * @param ImageProcessor|null $processor Процессор изображений
      */
-    public function __construct(int $fileId, ?ImageProcessor $processor = null)
+    public function __construct(int $fileId, ?ImageProcessor $processor = null, ?FileServiceContract $files = null)
     {
         $this->fileId = $fileId;
-        $this->processor = $processor ?? new ImageProcessor();
+        $this->files = $files ?? FileService::resolve();
+        $this->processor = $processor ?? new ImageProcessor(files: $this->files);
     }
 
     /**
@@ -147,7 +150,7 @@ class ImageBuilder
     public function getUrl(?int $fileId = null): string
     {
         $fileId = $fileId ?: $this->fileId;
-        $file = FileService::getFileData($fileId);
+        $file = $this->files->getFileData($fileId);
         return $file ? ($file['SRC'] ?? '') : '';
     }
 
@@ -160,7 +163,7 @@ class ImageBuilder
     public function getFileInfo(?int $fileId = null): ?array
     {
         $fileId = $fileId ?: $this->fileId;
-        return FileService::getFileData($fileId);
+        return $this->files->getFileData($fileId);
     }
 
     /**
@@ -170,7 +173,7 @@ class ImageBuilder
      */
     public function clearCache(): void
     {
-        $cache = new DatabaseImageCache();
+        $cache = new DatabaseImageCache($this->files);
         $cache->clearForFile($this->fileId);
     }
 

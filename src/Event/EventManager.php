@@ -78,10 +78,13 @@ class EventManager extends BaseEntityManager
         $result = new Result();
 
         try {
-            $classList = array_column(
-                Filesystem::classFinder()->extends($this->module->getLibPath(), $this->getEntityClass()),
-                'class'
-            );
+            $libPath = $this->module->getLibPath();
+            $classList = $libPath !== null
+                ? array_column(
+                    Filesystem::classFinder()->extends($libPath, $this->getEntityClass()),
+                    'class'
+                )
+                : [];
 
             $handlerList = $this->getClassHandlers($classList);
             $registeredList = $this->getRegisteredHandlers($this->getEntityClass());

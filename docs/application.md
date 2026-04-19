@@ -3,6 +3,8 @@
 Файл: `src/Foundation/Application.php`  
 Пространство имён: `MB\Bitrix\Foundation`
 
+Сопоставление с привычными идеями Laravel (без пакетов `illuminate/*`): [`laravel-parity.md`](laravel-parity.md).
+
 Класс `Application` — это **ядро mb-bitrix-support**, объединяющее:
 
 - DI‑контейнер (`MB\Container\Container`);
@@ -46,6 +48,7 @@ $app->boot();
   - отправляет событие `ON_BUILD_KERNEL_APPLICATION_EVENT`.
 - **Конфигурация путей** (`setBasePath()`):
   - задаёт базовый путь проекта;
+  - подмешивает PHP-конфиги из каталога **`{basePath}/config/*.php`** в репозиторий, доступный как `app('config')` и хелперу `config()` (см. [`laravel-parity.md`](laravel-parity.md));
   - через `bindPathsInContainer()` регистрирует сервисы:
     - `path.local` — `DOCUMENT_ROOT . '/local'`,
     - `path.bitrix` — `DOCUMENT_ROOT . '/bitrix'`,

@@ -10,5 +10,6 @@ interface Entity
     public function getLocalPath(): ?string;
     public function getLibPath(): ?string;
     public function getNamespace(): string;
+    public function getInstallConfig(): array;
     public function getConfig(string $siteId = ''): ?Config\Entity;
 }

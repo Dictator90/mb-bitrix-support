@@ -50,10 +50,13 @@ class HighloadBlockManager extends BaseEntityManager
     protected function dropTable(): Result
     {
         $result = new Result();
-        $classList = array_column(
-            Filesystem::classFinder()->extends($this->module->getLibPath(), $this->getEntityClass()),
-            'class'
-        );
+        $libPath = $this->module->getLibPath();
+        $classList = $libPath !== null
+            ? array_column(
+                Filesystem::classFinder()->extends($libPath, $this->getEntityClass()),
+                'class'
+            )
+            : [];
 
         return $this->dropTableFor($classList, $result);
     }
@@ -85,10 +88,15 @@ class HighloadBlockManager extends BaseEntityManager
     {
         $result = new Result();
 
-        $classList = $classList ?? array_column(
-            Filesystem::classFinder()->extends($this->module->getLibPath(), $this->getEntityClass()),
-            'class'
-        );
+        if ($classList === null) {
+            $libPath = $this->module->getLibPath();
+            $classList = $libPath !== null
+                ? array_column(
+                    Filesystem::classFinder()->extends($libPath, $this->getEntityClass()),
+                    'class'
+                )
+                : [];
+        }
 
         foreach ($classList as $className) {
             if ($className::getName() && $className::getTableName()) {

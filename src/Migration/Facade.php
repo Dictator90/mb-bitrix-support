@@ -3,50 +3,68 @@
 namespace MB\Bitrix\Migration;
 
 use Bitrix\Main\Error;
-use MB\Bitrix\Contracts\Module\Entity as ModuleEntity;
 use MB\Bitrix\Contracts;
+use MB\Bitrix\Contracts\Migration\Entity as MigrationEntityContract;
+use MB\Bitrix\Contracts\Module\Entity as ModuleEntity;
+use MB\Bitrix\Migration\Entities\Agent;
+use MB\Bitrix\Migration\Entities\Event;
+use MB\Bitrix\Migration\Entities\File;
+use MB\Bitrix\Migration\Entities\Storage;
 
 final class Facade implements Contracts\Migration\Facade
 {
-    public function __construct(protected ModuleEntity $module)
+    /**
+     * Default module lifecycle pipeline.
+     *
+     * Files go first on install/update so public/admin assets exist before Bitrix
+     * starts using handlers/UI. On uninstall the order is reversed.
+     *
+     * @var array<string, class-string<MigrationEntityContract>>
+     */
+    private const DEFAULT_PIPELINE = [
+        'file' => File::class,
+        'storage' => Storage::class,
+        'event' => Event::class,
+    ];
+
+    /**
+     * Optional entities available outside the default pipeline.
+     *
+     * @var array<string, class-string<MigrationEntityContract>>
+     */
+    private const OPTIONAL_PIPELINE = [
+        'agent' => Agent::class,
+    ];
+
+    /**
+     * @param array<string, class-string<MigrationEntityContract>>|null $entities
+     * Passing a custom map replaces the built-in registry and is intended for tests
+     * or host-module overrides.
+     */
+    public function __construct(
+        protected ModuleEntity $module,
+        private ?array $entities = null
+    )
     {}
+
+    public function up(): Result
+    {
+        return $this->upAll();
+    }
+
+    public function down(): Result
+    {
+        return $this->downAll();
+    }
 
     public function upAll(): Result
     {
-        $result = new Result();
-
-        $result->setData([
-            'file' => $this->upFiles(),
-            'storage' => $this->upStorages(),
-            'event' => $this->upEvents(),
-            //'agent' => $this->upAgent(),
-        ]);
-
-        return $result;
+        return $this->runPipeline($this->defaultPipeline(), 'up');
     }
 
     public function downAll(): Result
     {
-        $result = new Result();
-
-        $result->setData([
-            'file' => $this->downFiles(),
-            'storage' => $this->downStorages(),
-            'event' => $this->downEvents(),
-            //'agent' => $this->downAgent(),
-        ]);
-
-        return $result;
-    }
-
-    public function upStorages(): Result
-    {
-        return $this->up(Storage::class);
-    }
-
-    public function downStorages(): Result
-    {
-        return $this->down(Storage::class);
+        return $this->runPipeline(array_reverse($this->defaultPipeline(), true), 'down');
     }
 
     /**
@@ -55,7 +73,7 @@ final class Facade implements Contracts\Migration\Facade
      */
     public function upAgents(): Result
     {
-        return $this->up(Agent::class);
+        return $this->runNamedEntity('agent', 'up');
     }
 
     /**
@@ -64,7 +82,7 @@ final class Facade implements Contracts\Migration\Facade
      */
     public function downAgents(): Result
     {
-        return $this->down(Agent::class);
+        return $this->runNamedEntity('agent', 'down');
     }
 
     /**
@@ -74,7 +92,7 @@ final class Facade implements Contracts\Migration\Facade
      */
     public function upEvents(): Result
     {
-        return $this->up(Event::class);
+        return $this->runNamedEntity('event', 'up');
     }
 
     /**
@@ -83,71 +101,107 @@ final class Facade implements Contracts\Migration\Facade
      */
     public function downEvents(): Result
     {
-        return $this->down(Event::class);
+        return $this->runNamedEntity('event', 'down');
     }
 
     public function upFiles(): Result
     {
-        return $this->up(File::class);
+        return $this->runNamedEntity('file', 'up');
     }
 
     public function downFiles(): Result
     {
-        return $this->down(File::class);
+        return $this->runNamedEntity('file', 'down');
     }
 
-    protected function up(string $className, $arguments = null)
+    public function upStorages(): Result
     {
-        return $this->callEntity($className, 'up', $arguments);
+        return $this->runNamedEntity('storage', 'up');
     }
 
-    protected function down(string $className, $arguments = null)
+    public function downStorages(): Result
     {
-        return $this->callEntity($className, 'down', $arguments);
+        return $this->runNamedEntity('storage', 'down');
     }
 
-    protected function check(string $className, $arguments = null)
+    /**
+     * @return array<string, class-string<MigrationEntityContract>>
+     */
+    private function defaultPipeline(): array
     {
-        return $this->callEntity($className, 'check', $arguments);
+        if ($this->entities === null) {
+            return self::DEFAULT_PIPELINE;
+        }
+
+        $pipeline = [];
+        foreach (array_keys(self::DEFAULT_PIPELINE) as $name) {
+            if (isset($this->entities[$name])) {
+                $pipeline[$name] = $this->entities[$name];
+            }
+        }
+
+        return $pipeline;
     }
 
-    protected function callEntity($className, $method, $arguments = null)
+    /**
+     * @return array<string, class-string<MigrationEntityContract>>
+     */
+    private function allEntities(): array
+    {
+        return $this->entities ?? (self::DEFAULT_PIPELINE + self::OPTIONAL_PIPELINE);
+    }
+
+    private function runNamedEntity(string $name, string $method): Result
+    {
+        $entities = $this->allEntities();
+
+        if (! isset($entities[$name])) {
+            return (new Result())->addError(new Error("Invalid migration entity `{$name}`"));
+        }
+
+        return $this->callEntity($entities[$name], $method);
+    }
+
+    /**
+     * @param array<string, class-string<MigrationEntityContract>> $pipeline
+     */
+    private function runPipeline(array $pipeline, string $method): Result
     {
         $result = new Result();
-        if (in_array($className, static::getEntityList())) {
-            $result = $this->callMethod($className, $method, $arguments);
-        } else {
-            $result->addError(new Error("Invalid entity class `{$className}`"));
+        $data = [];
+
+        foreach ($pipeline as $name => $className) {
+            $stepResult = $this->callEntity($className, $method);
+            $data[$name] = $stepResult;
+            $result->merge($stepResult);
         }
+
+        $result->setData($data);
 
         return $result;
     }
 
-    protected function callMethod($className, $method, $arguments = null)
+    private function callEntity(string $className, string $method, mixed $arguments = null): Result
     {
         $result = new Result();
         $reflection = new \ReflectionClass($className);
 
-        if (!$reflection->implementsInterface(Contract\MigrationInterface::class)) {
-            $result->addError(new Error("Class must be implements " . Contract\MigrationInterface::class));
-        } elseif ($reflection->hasMethod($method)) {
-            /** @var Contract\MigrationInterface $instancse */
-            $instance = $reflection->newInstance($this->module);
-            return $instance->{$method}($arguments);
-        } else {
+        if (!$reflection->implementsInterface(MigrationEntityContract::class)) {
+            $result->addError(new Error('Class must implement ' . MigrationEntityContract::class));
+        } elseif (! $reflection->hasMethod($method)) {
             $result->addError(new Error("Class {$className} hasn't called method {$method}"));
+        } else {
+            /** @var MigrationEntityContract $instance */
+            $instance = $reflection->newInstance($this->module);
+            try {
+                return $arguments === null
+                    ? $instance->{$method}()
+                    : $instance->{$method}($arguments);
+            } catch (\Throwable $throwable) {
+                $result->addThrowable($throwable);
+            }
         }
 
         return $result;
-    }
-
-    protected static function getEntityList(): array
-    {
-        return [
-            Storage::class,
-            Agent::class,
-            Event::class,
-            File::class,
-        ];
     }
 }

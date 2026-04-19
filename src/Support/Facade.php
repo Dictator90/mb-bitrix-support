@@ -15,21 +15,48 @@ use MB\Bitrix\Foundation\Application;
 abstract class Facade
 {
     /**
+     * @var array<class-string, object>
+     */
+    protected static array $resolvedInstance = [];
+
+    /**
      * Get the service identifier in the container.
      */
     abstract protected static function getFacadeAccessor(): string;
+
+    /**
+     * Clear cached facade roots (e.g. between tests).
+     */
+    public static function clearResolvedInstances(): void
+    {
+        static::$resolvedInstance = [];
+    }
+
+    /**
+     * Swap the underlying instance for this facade (testing).
+     */
+    public static function swap(object $instance): object
+    {
+        static::$resolvedInstance[static::class] = $instance;
+
+        return $instance;
+    }
 
     /**
      * Resolve the underlying instance from the Application container.
      */
     protected static function resolveInstance(): object
     {
+        if (array_key_exists(static::class, static::$resolvedInstance)) {
+            return static::$resolvedInstance[static::class];
+        }
+
         $app = Application::getInstance();
 
         /** @var object $service */
         $service = $app->make(static::getFacadeAccessor());
 
-        return $service;
+        return static::$resolvedInstance[static::class] = $service;
     }
 
     /**

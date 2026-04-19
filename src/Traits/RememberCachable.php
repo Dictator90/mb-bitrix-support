@@ -238,7 +238,9 @@ trait RememberCachable
     public static function __callStatic($name, $arguments)
     {
         if ($name === 'remember') {
-            (new static())->remember(...$arguments);
+            return (new static())->remember(...$arguments);
         }
+
+        return null;
     }
 }

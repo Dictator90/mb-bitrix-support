@@ -1,15 +1,11 @@
 {
   "name": "mb4it/bitrix-support",
-  "description": "description",
+  "description": "Helper library for 1C-Bitrix: ORM storage, migrations, EntityView, files, logging.",
+  "type": "library",
   "minimum-stability": "stable",
   "license": "MIT",
-  "authors": [
-    {
-      "name": "Maxim Bezvodinskikh",
-      "email": "m.bezvodinskikh@gmail.com"
-    }
-  ],
   "require": {
+    "php": "^8.2",
     "mb4it/container": "@dev",
     "mb4it/stringable": "@dev",
     "mb4it/collections": "@dev",
@@ -20,9 +16,39 @@
     "ext-fileinfo": "*",
     "psr/log": "^1.0|^2.0|^3.0"
   },
+  "require-dev": {
+    "avshatalov48/bitrix-core-business": "@dev",
+    "ext-pdo_sqlite": "*",
+    "phpunit/phpunit": "^11.0",
+    "phpstan/phpstan": "^2.0"
+  },
+  "authors": [
+    {
+      "name": "Maxim Bezvodinskikh",
+      "email": "m.bezvodinskikh@gmail.com"
+    }
+  ],
   "autoload": {
     "psr-4": {
       "MB\\Bitrix\\": "src/"
-    }
+    },
+    "files": [
+      "src/Support/helpers.php"
+    ]
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "MB\\Bitrix\\Tests\\": "tests/"
+    },
+    "classmap": [
+      "vendor/avshatalov48/bitrix-core-business/modules/main/lib"
+    ]
+  },
+  "scripts": {
+    "lint": "@php scripts/dev/lint.php src tests scripts",
+    "phpstan": "phpstan analyse -c phpstan.neon --memory-limit=512M",
+    "test": "phpunit --testsuite default",
+    "test:sqlite": "phpunit -c phpunit.sqlite.xml",
+    "test:integration": "phpunit --bootstrap tests/integration-bootstrap.php --testsuite integration"
   }
 }

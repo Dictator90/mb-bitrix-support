@@ -19,9 +19,8 @@ final class LoggerFactory implements LoggerFactoryInterface
     public function file(string $fileName = '{level}_{date}.log', bool $daily = true): LoggerInterface
     {
         $basePath = '/local/log/';
-        /** @var Entity $config */
         $config = $this->moduleId ? app("$this->moduleId:config"): null;
-        if ($config) {
+        if ($config instanceof Entity) {
             $basePath = $config->get('log_path') ?: $basePath;
         }
 

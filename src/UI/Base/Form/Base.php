@@ -9,10 +9,10 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Request;
 use Bitrix\Main\UI\Extension;
 use Bitrix\Main\Web\Uri;
-use MB\Bitrix\Module\ModuleEntity;
+use MB\Bitrix\Contracts\Module\Entity as ModuleEntityContract;
 use MB\Bitrix\Support\Data\TextString;
 use MB\Bitrix\UI\Control\TabSet\BitrixTabSet;
-use MB\Bitrix\Settings\Options;
+use MB\Core\Settings\Options;
 use MB\Bitrix\UI\Base as UiBase;
 use MB\Bitrix\UI\Base\Field;
 use MB\Bitrix\UI\Base\Row;
@@ -38,7 +38,7 @@ abstract class Base
 
     protected Request|HttpRequest $request;
 
-    protected ?ModuleEntity $module = null;
+    protected ?ModuleEntityContract $module = null;
 
     protected ?Options\Base $optionsEntity = null;
 
@@ -78,13 +78,13 @@ abstract class Base
         $this->setId($this->buildId($id, $siteId));
     }
 
-    public function setModule(ModuleEntity $module): static
+    public function setModule(ModuleEntityContract $module): static
     {
         $this->module = $module;
         return $this;
     }
 
-    public function getModule(): ?ModuleEntity
+    public function getModule(): ?ModuleEntityContract
     {
         if (!$this->module) {
             $this->module = module();

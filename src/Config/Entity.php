@@ -45,9 +45,13 @@ class Entity implements \MB\Bitrix\Contracts\Config\Entity
 
     public function isEmpty(string $name): bool
     {
-        return
-            $this->options->whereNotNull($name)->isEmpty()
-            || $this->options->where($name, '==', '');
+        if (! $this->options->has($name)) {
+            return true;
+        }
+
+        $value = $this->options->get($name);
+
+        return $value === null || $value === '';
     }
 
     public function set(string $name, $value = ""): static
@@ -87,7 +91,10 @@ class Entity implements \MB\Bitrix\Contracts\Config\Entity
         return '\\' . get_called_class();
     }
 
-    public static function create(string $moduleId, $siteId = ''): static
+    /**
+     * Canonical factory: resolves the module via {@see module()} (requires `Application::registerModule`).
+     */
+    public static function create(string $moduleId, string $siteId = ''): static
     {
         return new static(module($moduleId), $siteId);
     }

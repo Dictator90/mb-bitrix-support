@@ -1,6 +1,6 @@
-## Обзор пакета `mb/bitrix-support`
+## Обзор пакета `mb4it/bitrix-support`
 
-Пакет `mb/bitrix-support` — это набор вспомогательных классов и абстракций для Bitrix, который:
+Пакет **`mb4it/bitrix-support`** (Composer) — это набор вспомогательных классов и абстракций для Bitrix, который:
 
 - упрощает **работу с файлами и изображениями** (включая поиск дубликатов и кэширование превью);
 - даёт удобный слой над **ORM и Highload-блоками** (описание сущностей в коде и их синхронизация с БД);
@@ -27,10 +27,17 @@
 ```json
 "autoload": {
   "psr-4": {
-    "MB\\Bitrix\\": "src/"
-  }
+    "MB\\Bitrix\\": "src/",
+    "MB\\Core\\": "src/"
+  },
+  "files": [
+    "src/Support/helpers.php"
+  ]
 }
 ```
+
+См. также матрицу поддерживаемых подсистем: [`SUPPORTED.md`](SUPPORTED.md).  
+DI в духе Laravel **без** пакетов Illuminate: [`laravel-parity.md`](laravel-parity.md), пример bootstrap: [`examples/kernel-bootstrap.md`](examples/kernel-bootstrap.md).
 
 ---
 
@@ -39,7 +46,7 @@
 Добавьте зависимость в `composer.json` вашего проекта (или установите через Composer напрямую):
 
 ```bash
-composer require mb/bitrix-support
+composer require mb4it/bitrix-support
 ```
 
 Убедитесь, что в автозагрузке вашего проекта настроен Composer, а модуль Bitrix, внутри которого вы планируете использовать пакет, подключает `vendor/autoload.php`.
@@ -58,26 +65,26 @@ composer require mb/bitrix-support
 - сохранение физического файла и запись строки в таблицу `b_file`;
 - возврат `FILE_ID` или `null`, а также вспомогательные методы для чтения данных файла.
 
-Пример базового использования `FileService`:
+Пример базового использования `FileService` (предпочтительно через контейнер после bootstrap ядра):
 
 ```php
-use MB\Bitrix\File\FileService;
+use MB\Bitrix\Contracts\File\FileServiceContract;
 
 // Например, $_FILES['PHOTO']
 $fileData = $_FILES['PHOTO'] ?? null;
 
 if ($fileData) {
-    $fileId = FileService::saveFile(
-        $fileData,
-        'my_module/photos', // относительный путь в каталоге upload
-    );
+    $files = app('file.service'); // или app(FileServiceContract::class)
+    $fileId = $files->save($fileData, 'my_module/photos');
 
     if ($fileId) {
-        $fileInfo = FileService::getFileData($fileId);
+        $fileInfo = $files->getFileData($fileId);
         // $fileInfo содержит расширенные данные файла
     }
 }
 ```
+
+Статические вызовы `MB\Bitrix\File\FileService::…` по-прежнему допустимы (делегирование в общий экземпляр).
 
 За подробностями по работе с файлами и изображениями см. файл
 [`docs/file-and-image.md`](file-and-image.md).
@@ -91,6 +98,7 @@ if ($fileData) {
 - **`file-and-image.md`** – работа с файлами и изображениями;
 - **`storage-and-highloadblock.md`** – надстройка над ORM и Highload-блоками;
 - **`migrations.md`** – миграции и менеджеры сущностей;
+- **`smoke-config.md`** – smoke-сценарии для Config / `ConfigLocator` / `Module\Entity`;
 - **`components.md`** – базовый компонент Bitrix и параметры;
 - **`logging-and-events.md`** – логирование и уведомления;
 - **`agents-and-events.md`** – агенты и обработчики событий;

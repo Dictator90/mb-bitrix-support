@@ -14,9 +14,15 @@ final class ServiceProvider extends BaseServiceProvider
 {
     public function register(): void
     {
-        $this->app->singleton(LoggerFactoryInterface::class, LoggerFactory::class);
-        $this->app->singleton('logger', LoggerFactoryInterface::class);
-        $this->app->singleton('logger', LoggerFactoryInterface::class);
+        $this->app->singleton('logger', LoggerFactory::class);
+        $this->app->singleton(
+            LoggerFactoryInterface::class,
+            static fn ($app) => $app->make('logger')
+        );
+        $this->app->singleton(
+            ModuleLoggerFactory::class,
+            static fn () => new ModuleLoggerFactory()
+        );
     }
 
     /**
@@ -26,6 +32,7 @@ final class ServiceProvider extends BaseServiceProvider
     {
         return [
             LoggerFactoryInterface::class,
+            ModuleLoggerFactory::class,
             'logger',
         ];
     }

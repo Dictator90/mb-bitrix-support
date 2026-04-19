@@ -1,6 +1,6 @@
 <?php
 
-namespace MB\Core\Config;
+namespace MB\Bitrix\Config;
 
 use Bitrix\Main\Context;
 
@@ -16,7 +16,10 @@ class ConfigManager
         $siteKey = self::getInstanceKey($moduleId, $siteId);
 
         if (!isset(self::$instances[$siteKey])) {
-            self::$instances[$siteKey] = Entity::createByModuleId($moduleId, empty($siteId) ? '' : $siteId);
+            $resolvedSiteId = $siteId === false
+                ? Context::getCurrent()->getSite()
+                : (string) $siteId;
+            self::$instances[$siteKey] = Entity::create($moduleId, $resolvedSiteId);
         }
 
         return self::$instances[$siteKey];

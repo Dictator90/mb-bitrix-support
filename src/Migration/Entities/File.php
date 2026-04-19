@@ -1,6 +1,6 @@
 <?php
 
-namespace MB\Core\Migration;
+namespace MB\Bitrix\Migration\Entities;
 
 use Bitrix\Main;
 use Bitrix\Main\Application;
@@ -15,42 +15,27 @@ class File extends BaseEntity
     protected const ACTION_COPY_DIR_FILES = 'copy-dir-files';
     protected const ACTION_COPY_DIR = 'copy-dir';
 
-	public function check(): bool
+    public function check(): bool
     {
-		return true;
-	}
+        return true;
+    }
 
     public function up(): Result
     {
         $result = new Result();
+        $data = [];
 
-        $modulePath = $this->module->getLocalPath();
-        if ($installConfig = $this->module->getInstallConfig()) {
-            foreach ($installConfig as $action => $pathDirections) {
-                foreach ($pathDirections as $from => $to) {
-                    $from = $modulePath . '/install/' . $from;
-                    $to = str_replace(self::STR_MODULE_ID, $this->module->getId(), $to);
-
-                    if (Fs::isDirectory(Application::getDocumentRoot() . $from)) {
-                        $res = match ($action) {
-                            self::ACTION_COPY_DIR => self::copyDir($from, $to),
-                            self::ACTION_COPY_DIR_FILES => self::copyDir($from, $to, false, false),
-                            default => new Main\Result()
-                        };
-
-                        $resultData = $result->getData();
-                        if (!$res->isSuccess()) {
-                            $resultData[$to] = 'error';
-                            $result->addErrors($res->getErrors());
-                        } else {
-                            $resultData[$to] = 'success';
-                        }
-
-                        $result->setData($resultData);
-                    }
-                }
+        foreach ($this->iterateOperations() as $operation) {
+            if (! $this->sourceExists($operation['from'])) {
+                continue;
             }
+
+            $stepResult = $this->applyUpOperation($operation);
+            $data[$operation['to']] = $stepResult->isSuccess() ? 'success' : 'error';
+            $result->merge($stepResult);
         }
+
+        $result->setData($data);
 
         return $result;
     }
@@ -58,116 +43,166 @@ class File extends BaseEntity
     public function down(): Result
     {
         $result = new Result();
+        $data = [];
 
-        $modulePath = $this->module->getLocalPath();
-        if ($installConfig = $this->module->getInstallConfig()) {
-            foreach ($installConfig as $action => $pathDirections) {
-                foreach ($pathDirections as $from => $to) {
-                    $from = $modulePath . '/install/' . $from;
-                    $to = str_replace(self::STR_MODULE_ID, $this->module->getId(), $to);
-                    if (Fs::isDirectory(Application::getDocumentRoot() . $to)) {
-                        $res = match ($action) {
-                            self::ACTION_COPY_DIR => self::deleteDir($to),
-                            self::ACTION_COPY_DIR_FILES => self::deleteDirFiles($from, $to),
-                            default => (new Result())->addError(new Main\Error("Unknown action `$action`"))
-                        };
-
-                        $resultData = $result->getData();
-                        if (!$res->isSuccess()) {
-                            $resultData[$to] = 'error';
-                            $result->addErrors($res->getErrors());
-                        } else {
-                            $resultData[$to] = 'success';
-                        }
-
-                        $result->setData($resultData);
-                    }
-                }
+        foreach ($this->iterateOperations() as $operation) {
+            if (! $this->targetExists($operation['to'])) {
+                continue;
             }
+
+            $stepResult = $this->applyDownOperation($operation);
+            $data[$operation['to']] = $stepResult->isSuccess() ? 'success' : 'error';
+            $result->merge($stepResult);
         }
+
+        $result->setData($data);
 
         return $result;
     }
 
-    public static function copyDir($fromDir, $toDir, $rewrite = true, $recursive = true): Result
+    /**
+     * @return iterable<int, array{action: string, from: string, to: string}>
+     */
+    protected function iterateOperations(): iterable
     {
-        $result = new Result();
+        $modulePath = $this->module->getLocalPath();
+        if ($modulePath === null) {
+            return [];
+        }
 
-        $dir = self::checkDir($toDir);
-        if (!is_writable($dir->getPhysicalPath())){
-            $result->addError(new Main\Error(module('mb.core')->getLang('ERROR_PERMISSIONS', ['#path#' => $dir->getPhysicalPath()])));
-            return $result;
+        $operations = [];
+        foreach ($this->module->getInstallConfig() as $action => $pathDirections) {
+            if (! is_array($pathDirections)) {
+                continue;
+            }
+
+            foreach ($pathDirections as $from => $to) {
+                $operations[] = [
+                    'action' => (string) $action,
+                    'from' => $modulePath . '/install/' . $from,
+                    'to' => str_replace(self::STR_MODULE_ID, $this->module->getId(), (string) $to),
+                ];
+            }
+        }
+
+        return $operations;
+    }
+
+    /**
+     * @param array{action: string, from: string, to: string} $operation
+     */
+    protected function applyUpOperation(array $operation): Result
+    {
+        return match ($operation['action']) {
+            self::ACTION_COPY_DIR => $this->copyDir($operation['from'], $operation['to']),
+            self::ACTION_COPY_DIR_FILES => $this->copyDir($operation['from'], $operation['to'], false, false),
+            default => $this->unknownActionResult($operation['action']),
+        };
+    }
+
+    /**
+     * @param array{action: string, from: string, to: string} $operation
+     */
+    protected function applyDownOperation(array $operation): Result
+    {
+        return match ($operation['action']) {
+            self::ACTION_COPY_DIR => $this->deleteDir($operation['to']),
+            self::ACTION_COPY_DIR_FILES => $this->deleteDirFiles($operation['from'], $operation['to']),
+            default => $this->unknownActionResult($operation['action']),
+        };
+    }
+
+    protected function sourceExists(string $fromDir): bool
+    {
+        return Fs::isDirectory($this->documentRoot() . $fromDir);
+    }
+
+    protected function targetExists(string $toDir): bool
+    {
+        return Fs::isDirectory($this->documentRoot() . $toDir);
+    }
+
+    protected function unknownActionResult(string $action): Result
+    {
+        return (new Result())->addError(new Main\Error("Unknown install action `{$action}`"));
+    }
+
+    protected function permissionDeniedResult(string $path): Result
+    {
+        return (new Result())->addError(new Main\Error(
+            sprintf('Path is not writable: %s', $path)
+        ));
+    }
+
+    protected function copyFailedResult(string $fromDir, string $toDir): Result
+    {
+        return (new Result())->addError(new Main\Error(
+            sprintf('Failed to copy files from `%s` to `%s`.', $fromDir, $toDir)
+        ));
+    }
+
+    protected function documentRoot(): string
+    {
+        return Application::getDocumentRoot();
+    }
+
+    public function copyDir(string $fromDir, string $toDir, bool $rewrite = true, bool $recursive = true): Result
+    {
+        $dir = $this->checkDir($toDir);
+        if (! is_writable($dir->getPhysicalPath())) {
+            return $this->permissionDeniedResult($dir->getPhysicalPath());
         }
 
         $res = \CopyDirFiles(
-            Application::getDocumentRoot() . $fromDir,
-            Application::getDocumentRoot() . $toDir,
+            $this->documentRoot() . $fromDir,
+            $this->documentRoot() . $toDir,
             $rewrite,
             $recursive,
             false,
             'menu'
         );
 
-        if (!$res) {
-            $result->addError(
-                new Main\Error(
-                    module('mb.core')
-                        ->getLang(
-                            'ERROR_COPY_DIR_FILES',
-                            [
-                                '#from#' => $fromDir,
-                                '#to#' => $toDir
-                            ]
-
-                        )
-                )
-            );
+        if (! $res) {
+            return $this->copyFailedResult($fromDir, $toDir);
         }
 
-        return $result;
+        return new Result();
     }
 
-    public static function deleteDir($dirName)
+    public function deleteDir(string $dirName): Result
     {
-        $result = new Result();
-        $dirName = str_replace(array('//', '///'), '/', Application::getDocumentRoot() . '/' . $dirName);
+        $dirName = str_replace(array('//', '///'), '/', $this->documentRoot() . '/' . $dirName);
 
-        if (!is_writable($dirName)){
-            return $result->addError(
-                new Main\Error(module('mb.core')->getLang('ERROR_PERMISSIONS', ['#path#' => $dirName]))
-            );
+        if (! is_writable($dirName)) {
+            return $this->permissionDeniedResult($dirName);
         }
 
         Directory::deleteDirectory($dirName);
 
-        return $result;
+        return new Result();
     }
 
-    public static function deleteDirFiles($fromDir, $toDir)
+    public function deleteDirFiles(string $fromDir, string $toDir): Result
     {
-        $result = new Result();
+        $toDir = str_replace(array('//', '///'), '/', $this->documentRoot() . '/' . $toDir);
+        $fromDir = str_replace(array('//', '///'), '/', $this->documentRoot() . '/' . $fromDir);
 
-        $toDir = str_replace(array('//', '///'), '/', Application::getDocumentRoot() . '/' . $toDir);
-        $fromDir = str_replace(array('//', '///'), '/', Application::getDocumentRoot() . '/' . $fromDir);
-
-        if (!is_writable($toDir)){
-            return $result->addError(
-                new Main\Error(module('mb.core')->getLang('ERROR_PERMISSIONS', ['#path#' => $toDir]))
-            );
+        if (! is_writable($toDir)) {
+            return $this->permissionDeniedResult($toDir);
         }
 
         DeleteDirFiles($fromDir, $toDir);
 
-        return $result;
+        return new Result();
     }
 
-    public static function checkDir($path)
+    public function checkDir(string $path): Directory
     {
-        if (!Fs::isDirectory(Application::getDocumentRoot() . $path)) {
+        if (! Fs::isDirectory($this->documentRoot() . $path)) {
             Fs::makeDirectory($path, 0755, true);
         }
 
-        $dir = new Directory(Application::getDocumentRoot() . $path);
+        $dir = new Directory($this->documentRoot() . $path);
         $dir->markWritable();
 
         return $dir;

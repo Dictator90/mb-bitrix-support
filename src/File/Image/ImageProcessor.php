@@ -2,6 +2,7 @@
 namespace MB\Bitrix\File\Image;
 
 use Bitrix\Main;
+use MB\Bitrix\Contracts\File\FileServiceContract;
 use MB\Bitrix\Contracts\File\ImageCache as ImageCacheContract;
 use MB\Bitrix\Contracts\File\ImageProcessor as ImageProcessorContract;
 use MB\Bitrix\File\FileService;
@@ -16,11 +17,16 @@ class ImageProcessor implements ImageProcessorContract
 {
     private array $fileArray = [];
 
-    public function __construct(private ImageCacheContract|null $cache = null)
-    {
+    private FileServiceContract $files;
+
+    public function __construct(
+        private ImageCacheContract|null $cache = null,
+        ?FileServiceContract $files = null,
+    ) {
+        $this->files = $files ?? FileService::resolve();
         // Позволяет подменять реализацию кэша извне,
         // по умолчанию используется кэш в БД.
-        $this->cache = $cache ?? new DatabaseImageCache();
+        $this->cache = $this->cache ?? new DatabaseImageCache($this->files);
     }
 
     /**
@@ -106,7 +112,7 @@ class ImageProcessor implements ImageProcessorContract
 
             $tempFormat = $this->detectImageFormat($tempFile);
 
-            $fileArray = FileService::makeFileArray($tempFile);
+            $fileArray = $this->files->makeFileArray($tempFile);
             if (!$fileArray || !empty($fileArray['error'])) {
                 throw new Main\SystemException("Failed to create file array");
             }
@@ -117,7 +123,7 @@ class ImageProcessor implements ImageProcessorContract
                 : basename($tempFile);
             $fileArray['description'] = $originalFile['DESCRIPTION'] ?? '';
 
-            $fileId = FileService::saveFile($fileArray, 'image_processor');
+            $fileId = $this->files->saveFile($fileArray, 'image_processor');
             if (!$fileId) {
                 throw new Main\SystemException("Failed to save file to database");
             }
@@ -280,10 +286,10 @@ class ImageProcessor implements ImageProcessorContract
         return $filePath;
     }
 
-    private function getFileArray(int $fileId): array
+    private function getFileArray(int $fileId): ?array
     {
-        if (!$this->fileArray[$fileId]) {
-            $this->fileArray[$fileId] = FileService::getFileData($fileId);
+        if (!array_key_exists($fileId, $this->fileArray)) {
+            $this->fileArray[$fileId] = $this->files->getFileData($fileId);
         }
 
         return $this->fileArray[$fileId];

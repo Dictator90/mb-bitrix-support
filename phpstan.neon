@@ -1,0 +1,27 @@
+parameters:
+    level: 5
+    ignoreErrors:
+        -
+            identifier: new.static
+            path: src/Config/Entity.php
+    paths:
+        - src/Storage/SqlHelper.php
+        - src/Config
+        - src/Foundation
+        - src/Logger/LoggerFactory.php
+        - src/Logger/ModuleLoggerFactory.php
+        - src/Logger/ServiceProvider.php
+        - src/Migration/BaseEntity.php
+        - src/Migration/Facade.php
+        - src/Migration/Result.php
+        - src/Module
+        - src/Contracts/Config/Repository.php
+        - src/Contracts/Support/Renderable.php
+        - src/Support/Facade.php
+        - src/Support/helpers.php
+        - src/Support/Facades/Config.php
+        - tests
+    scanFiles:
+        - scripts/dev/bitrix-app-minimal.php
+        - scripts/dev/bitrix-db-minimal.php
+        - scripts/dev/bitrix-phpstan-stubs.php

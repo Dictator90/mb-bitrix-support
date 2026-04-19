@@ -7,7 +7,7 @@ use Bitrix\Main\Error;
 
 final class Result extends Main\Result
 {
-    public function addThrowable(\Throwable $throwable)
+    public function addThrowable(\Throwable $throwable): static
     {
         $this->addError(
             new Error(
@@ -18,6 +18,17 @@ final class Result extends Main\Result
                 ]
             )
         );
+
+        return $this;
+    }
+
+    public function merge(Main\Result $result): static
+    {
+        /** @var list<Error> $errors */
+        $errors = $result->getErrors();
+        if ($errors !== []) {
+            $this->addErrors($errors);
+        }
 
         return $this;
     }
