@@ -2,7 +2,6 @@
   "name": "mb4it/bitrix-support",
   "description": "Helper library for 1C-Bitrix: ORM storage, migrations, EntityView, files, logging.",
   "type": "library",
-  "minimum-stability": "stable",
   "license": "MIT",
   "require": {
     "php": "^8.2",
