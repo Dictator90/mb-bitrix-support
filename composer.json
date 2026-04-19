@@ -3,6 +3,7 @@
   "description": "Helper library for 1C-Bitrix: ORM storage, migrations, EntityView, files, logging.",
   "type": "library",
   "minimum-stability": "dev",
+  "prefer-stable": true,
   "license": "MIT",
   "require": {
     "php": "^8.2",
