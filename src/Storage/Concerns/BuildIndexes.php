@@ -15,7 +15,7 @@ trait BuildIndexes
     /**
      * Создает индексы колонок указанных в методе getIndexes()
      *
-     * Используется в MB\Core\Reference\Storage\Controller::createTable()
+     * Используется в MB\Bitrix\Reference\Storage\Controller::createTable()
      *
      * @see self::getIndexes()
      *

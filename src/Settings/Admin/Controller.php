@@ -1,6 +1,6 @@
 <?php
 
-namespace MB\Core\Settings\Admin;
+namespace MB\Bitrix\Settings\Admin;
 
 use Bitrix\Main\Engine;
 

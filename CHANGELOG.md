@@ -8,7 +8,7 @@
 - **DI / Laravel-like (no Illuminate):** `MB\Bitrix\Contracts\Config\Repository` + `Config\ArrayRepository`; `config()` helper and `Support\Facades\Config`; `module()` helper; `setBasePath()` loads `{basePath}/config/*.php`; `Support\Facade::clearResolvedInstances()` / `swap()` for tests; `MB\Bitrix\Contracts\Support\Renderable` replaces `illuminate/contracts`; removed `illuminate/contracts` from Composer requirements.
 - **Docs:** `docs/laravel-parity.md`, `docs/examples/kernel-bootstrap.md`; stubs `scripts/dev/bitrix-app-minimal.php` for tests.
 - **Module / container (post code-review):** `Module\Entity::getConfigClass()` now reflects `fillConfig()` / `ConfigLocator`; `getLibPath(): ?string` aligned with contract; callers guard null lib path. `Application::registerModule()` binds `{id}:module` with constructor param `id`; `{id}:migration` resolves to `MigrationFacade` built from the module entity.
-- **Autoload:** Composer now registers `MB\\Core\\` alongside `MB\\Bitrix\\`; admin settings tree lives under `src/Settings/` for `MB\Core\Settings\*`.
+- **Autoload:** package namespace is unified under `MB\\Bitrix\\`; admin settings tree uses `MB\Bitrix\Settings\*`.
 - **`app()`:** Added package helper (see `src/Support/helpers.php`) mapping to `Foundation\Application::getInstance()`.
 - **Module:** `Module\Entity::getMigrationFacade()` implemented; `fillConfig` fallback class fixed; `ModuleContainer` + `Application::container()` for per-module services.
 - **Migration:** `Migration\Entities\File` / `Storage` namespaces aligned to `MB\Bitrix\Migration\Entities`; `Storage` migration uses new `StorageEntityManager` and `Migration\Facades\Storage` for ORM table sync; `Facade` uses `Contracts\Migration\Entity` for interface checks.

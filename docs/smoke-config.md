@@ -31,16 +31,16 @@ $entity = ConfigManager::get('vendor.module', false);
 use MB\Bitrix\Module\Entity;
 
 $m = new Entity('vendor.module');
-// Ожидание: конструктор не падает в fillConfig из-за несуществующего MB\Core\Config\Entity при вызове ConfigLocator.
+// Ожидание: конструктор не падает в fillConfig из-за ошибок резолва ConfigLocator.
 ```
 
 ### C. `ConfigLocator` (точечно)
 
 ```php
-use MB\Core\Config\ConfigLocator;
+use MB\Bitrix\Config\ConfigLocator;
 
 $class = ConfigLocator::getConfigByModuleId('vendor.module');
-// Ожидание: class-string подкласса MB\Bitrix\Config\Entity или null, без ошибки автозагрузки «MB\Core\Config\Entity».
+// Ожидание: class-string подкласса MB\Bitrix\Config\Entity или null.
 ```
 
 ## Локальная статика (без полного Битрикс)

@@ -6,14 +6,14 @@
 
 | Идея Laravel | Аналог в пакете |
 |--------------|-----------------|
-| Service container | `MB\Container\Container` через [`Foundation\Application`](../src/Foundation/Application.php) |
-| Service providers (`register` / `boot`) | [`Foundation\ServiceProvider`](../src/Foundation/ServiceProvider.php), `Application::register()` |
+| Service container | `MB\Container\Container` через [`Foundation\Application`](application.md) |
+| Service providers (`register` / `boot`) | [`Foundation\ServiceProvider`](application.md), `Application::register()` |
 | Статические фасады | [`Support\Facade`](../src/Support/Facade.php), [`Support\Facades\*`](../src/Support/Facades) |
 | Хелпер `app()` | [`src/Support/helpers.php`](../src/Support/helpers.php) |
 | Хелпер `config()` | тот же файл, репозиторий `config` в контейнере |
 | Хелпер `module($id)` | резолв `"{moduleId}:module"` после `Application::registerModule()` |
-| Репозиторий конфигурации (dot-notation) | [`MB\Bitrix\Contracts\Config\Repository`](../src/Contracts/Config/Repository.php), реализация [`ArrayRepository`](../src/Config/ArrayRepository.php) |
-| Рендер «страницы» без Illuminate | [`MB\Bitrix\Contracts\Support\Renderable`](../src/Contracts/Support/Renderable.php) |
+| Репозиторий конфигурации (dot-notation) | [`Config\ArrayRepository`](../src/Config/ArrayRepository.php), [`Config\Repository`](../src/Contracts/Config/Repository.php) |
+| Рендер «страницы» без Illuminate | [`Contracts\Support\Renderable`](../src/Contracts/Support/Renderable.php) |
 
 ## Нет и не планируется в этом пакете
 
@@ -25,7 +25,7 @@
 
 ## Ограничения и риски
 
-- **`app()` / `module()` / `config()`** доступны только после инициализации [`Application`](../src/Foundation/Application.php) (в конструкторе вызывается `setInstance`). В чужом проекте с другим `app()` порядок автозагрузки `files` может конфликтовать — см. [`application.md`](application.md).
+- **`app()` / `module()` / `config()`** доступны только после инициализации [`Application`](application.md) (в конструкторе вызывается `setInstance`). В чужом проекте с другим `app()` порядок автозагрузки `files` может конфликтировать — см. [`application.md`](application.md).
 - **`module($id)`** требует предварительного **`$app->registerModule($id)`**; иначе контейнер не найдёт привязку.
 - **`config`**: PHP-файлы из каталога `config/` относительно **`setBasePath()`**; вызовите `setBasePath()` до первого чтения конфигурации, если нужны файлы на диске.
 

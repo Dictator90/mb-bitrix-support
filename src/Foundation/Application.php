@@ -5,7 +5,6 @@ use Bitrix\Main\Application as BitrixApplication;
 use MB\Bitrix\Config\ArrayRepository as ConfigArrayRepository;
 use MB\Bitrix\Contracts\Config\Repository as ConfigRepositoryContract;
 use MB\Bitrix\ServiceProvider as BitrixServiceProvider;
-use MB\Bitrix\Contracts\Module\Entity as ModuleEntityContract;
 use MB\Bitrix\File\ServiceProvider as FileServiceProvider;
 use MB\Bitrix\Filesystem\ServiceProvider as FilesystemServiceProvider;
 use MB\Bitrix\Migration\Facade as MigrationFacade;
@@ -63,7 +62,7 @@ class Application extends Container
     protected array $registeredCallbacks = [];
 
     /**
-     * Indicates if the application has been bootstrapped before.
+     * Indicates that boot() has successfully completed at least once.
      *
      * @var bool
      */
@@ -75,6 +74,13 @@ class Application extends Container
      * @var bool
      */
     protected bool $booted = false;
+
+    /**
+     * Indicates if the application is currently running boot().
+     *
+     * @var bool
+     */
+    protected bool $booting = false;
 
     /**
      * The array of booting callbacks.
@@ -125,7 +131,11 @@ class Application extends Container
         $this->registerBaseServiceProviders();
         $this->registerCoreContainerAliases();
 
-        $this->compile();
+        // Eager compile() removed: bindings whose concrete requires runtime
+        // parameters (e.g. ModuleEntity(string $id) via makeWith) cannot be
+        // precompiled. Container::make() falls back to lazy build() when
+        // $this->compiled is null. Opt into precompilation via compileToFile()
+        // from the application layer if needed.
 
         $this->attachEvents();
     }
@@ -228,7 +238,7 @@ class Application extends Container
 
     public function registerModule($moduleId): void
     {
-        $this->singleton("$moduleId:module", fn (Application $app) => $app->makeWith(ModuleEntityContract::class, ['id' => $moduleId]));
+        $this->singleton("$moduleId:module", static fn () => new ModuleEntity($moduleId));
         $this->bind("$moduleId:config", fn (Application $app) => $app->make("$moduleId:module")->getConfig(''));
         $this->singleton("$moduleId:migration", fn (Application $app) => new MigrationFacade($app->make("$moduleId:module")));
         $this->singleton(
@@ -303,15 +313,37 @@ class Application extends Container
     }
 
     /**
+     * Resolve a concrete class name for parameterized building.
+     *
+     * Fast path: if $abstract is already a class-string, avoid touching
+     * parent container internals. Reflection fallback is used only for
+     * alias/binding-backed ids.
+     */
+    protected function resolveParameterizedBuildClass(string $abstract): ?string
+    {
+        if (class_exists($abstract)) {
+            return $abstract;
+        }
+
+        $resolved = $this->resolveAliasName($abstract);
+        if (class_exists($resolved)) {
+            return $resolved;
+        }
+
+        $concrete = $this->getConcreteBinding($resolved);
+        if (is_string($concrete) && !is_callable($concrete) && class_exists($concrete)) {
+            return $concrete;
+        }
+
+        return null;
+    }
+
+    /**
      * Create an instance with constructor parameters (bypasses parent singleton cache).
      */
     protected function buildWithParameters(string $abstract, array $parameters): object
     {
-        $resolved = $this->resolveAliasName($abstract);
-        $concrete = $this->getConcreteBinding($resolved);
-        $class = (is_string($concrete) && !is_callable($concrete) && class_exists($concrete))
-            ? $concrete
-            : (class_exists($resolved) ? $resolved : null);
+        $class = $this->resolveParameterizedBuildClass($abstract);
 
         if ($class === null) {
             throw new NotFoundException("No concrete class for [{$abstract}] for makeWith.");
@@ -411,10 +443,15 @@ class Application extends Container
         static::$instance = $container instanceof self ? $container : null;
     }
 
+    public static function hasInstance(): bool
+    {
+        return static::$instance !== null;
+    }
+
     public static function getInstance(): Application
     {
         if (static::$instance === null) {
-            throw new \RuntimeException('KernelApplication instance has not been set.');
+            throw new \RuntimeException('Application instance has not been set.');
         }
 
         return static::$instance;
@@ -426,15 +463,10 @@ class Application extends Container
     }
 
     /**
-     * @param class-string|non-falsy-string $id
-     */
-    public function get(string $id): mixed
-    {
-        return $this->make($id);
-    }
-
-    /**
-     * Register a new registered listener.
+     * Register a callback fired each time a provider is registered.
+     *
+     * Callback dependencies are resolved via {@see self::call()} and may
+     * type-hint both Application ($app) and ServiceProvider ($provider).
      *
      * @param callable $callback
      * @return static
@@ -446,7 +478,7 @@ class Application extends Container
     }
 
     /**
-     * Determine if the application has booted.
+     * Determine if the application has completed boot().
      *
      * @return bool
      */
@@ -466,23 +498,28 @@ class Application extends Container
             return;
         }
 
-        // Dispatch lifecycle event before booting callbacks and providers.
-        $this->notify(self::ON_BEFORE_BOOT_KERNEL_APPLICATION_EVENT, ['app' => $this]);
+        $this->booting = true;
+        try {
+            // Dispatch lifecycle event before booting callbacks and providers.
+            $this->notify(self::ON_BEFORE_BOOT_KERNEL_APPLICATION_EVENT, ['app' => $this]);
 
-        $this->fireAppCallbacks($this->bootingCallbacks);
+            $this->fireAppCallbacks($this->bootingCallbacks);
 
-        array_walk($this->serviceProviders, function ($p) {
-            $this->bootProvider($p);
-        });
+            array_walk($this->serviceProviders, function ($p) {
+                $this->bootProvider($p);
+            });
 
-        $this->booted = true;
+            $this->booted = true;
 
-        $this->fireAppCallbacks($this->bootedCallbacks);
+            $this->fireAppCallbacks($this->bootedCallbacks);
 
-        // Dispatch lifecycle event after all providers are booted.
-        $this->notify(self::ON_AFTER_BOOT_KERNEL_APPLICATION_EVENT, ['app' => $this]);
+            // Dispatch lifecycle event after all providers are booted.
+            $this->notify(self::ON_AFTER_BOOT_KERNEL_APPLICATION_EVENT, ['app' => $this]);
 
-        $this->hasBeenBootstrapped = true;
+            $this->hasBeenBootstrapped = true;
+        } finally {
+            $this->booting = false;
+        }
     }
 
     public function registerCoreContainerAliases(): void
@@ -491,7 +528,9 @@ class Application extends Container
             'app' => [self::class, Container::class, ContainerInterface::class],
             'asset' => [Asset::class],
             'config' => [ConfigRepositoryContract::class, ConfigArrayRepository::class],
-            'module' => [ModuleEntity::class, ModuleEntityContract::class],
+            // No 'module' group: each module has its own "$moduleId:module" binding;
+            // aliasing ModuleEntityContract::class → 'module' (with no canonical binding)
+            // breaks compileAll (ReflectionClass('module')).
         ] as $key => $aliases) {
             foreach ($aliases as $alias) {
                 $this->alias($key, $alias);
@@ -533,8 +572,9 @@ class Application extends Container
         }
 
         $this->markAsRegistered($provider);
+        $this->fireRegisteredCallbacks($provider);
 
-        if ($this->isBooted()) {
+        if ($this->isBooted() || $this->booting) {
             $this->bootProvider($provider);
         }
 
@@ -637,6 +677,15 @@ class Application extends Container
         return $this;
     }
 
+    protected function fireRegisteredCallbacks(ServiceProvider $provider): static
+    {
+        foreach ($this->registeredCallbacks as $callback) {
+            $this->call($callback, ['provider' => $provider, 'app' => $this]);
+        }
+
+        return $this;
+    }
+
     /**
      * Mark the given provider as registered.
      *
@@ -679,6 +728,18 @@ class Application extends Container
     public function booting(callable $callback): static
     {
         $this->bootingCallbacks[] = $callback;
+        return $this;
+    }
+
+    /**
+     * Register a new "booted" listener.
+     *
+     * @param callable $callback
+     * @return static
+     */
+    public function booted(callable $callback): static
+    {
+        $this->bootedCallbacks[] = $callback;
         return $this;
     }
 
@@ -731,13 +792,7 @@ class Application extends Container
             unset($this->deferredServices[$service]);
         }
 
-        $this->register($instance = new $provider($this));
-
-        if (!$this->isBooted()) {
-            $this->booting(function () use ($instance) {
-                $this->bootProvider($instance);
-            });
-        }
+        $this->register(new $provider($this));
     }
 
     /**

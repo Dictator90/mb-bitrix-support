@@ -6,6 +6,8 @@
 - билдер параметров `MB\Bitrix\Component\Parameters\Builder` и набор готовых трейтов (`UseIblock`, `UseForm`, `UseAgreement`);
 - специализированные параметры для UI Form `MB\Bitrix\Component\Bitrix\UIForm\Parameters`.
 
+> **Примечание:** Для построения сложных UI-форм в админке также доступна новая UI-подсистема пакета — см. [`ui.md`](ui.md) (Base классы, Control поля, EntitySelector).
+
 ---
 
 ## Базовый компонент `BaseComponent`

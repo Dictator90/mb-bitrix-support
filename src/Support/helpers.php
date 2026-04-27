@@ -5,6 +5,8 @@ declare(strict_types=1);
 use MB\Bitrix\Contracts\Config\Repository as ConfigRepositoryContract;
 use MB\Bitrix\Contracts\Module\Entity as ModuleEntityContract;
 use MB\Bitrix\Foundation\Application;
+use MB\Bitrix\Module\Entity;
+use MB\Support\Str;
 
 if (! function_exists('app')) {
     /**
@@ -43,6 +45,12 @@ if (! function_exists('module')) {
      */
     function module(string $id): ModuleEntityContract
     {
-        return app("{$id}:module");
+        $normalized = Str::lower(Str::trim($id));
+        $partial = Entity::peekDuringConstruction($normalized);
+        if ($partial instanceof ModuleEntityContract) {
+            return $partial;
+        }
+
+        return app("{$normalized}:module");
     }
 }

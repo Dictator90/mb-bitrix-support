@@ -1,6 +1,6 @@
 <?php
 
-namespace MB\Core\Settings;
+namespace MB\Bitrix\Settings;
 
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Context;
@@ -20,7 +20,7 @@ use MB\Bitrix\UI\Control\TabSet\BitrixTabSet;
  * Предоставляет функционал для создания административного интерфейса настроек
  * с поддержкой множества сайтов, форм и таблиц данных.
  *
- * @package MB\Core\Settings
+ * @package MB\Bitrix\Settings
  */
 final class Builder
 {

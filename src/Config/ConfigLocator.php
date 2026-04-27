@@ -1,6 +1,6 @@
 <?php
 
-namespace MB\Core\Config;
+namespace MB\Bitrix\Config;
 
 use MB\Bitrix\Config\Entity as BitrixConfigEntity;
 use MB\Bitrix\Filesystem\Filesystem;
@@ -8,7 +8,7 @@ use MB\Bitrix\Filesystem\Filesystem;
 /**
  * Discovers module config entity classes under module `lib/` (extends {@see BitrixConfigEntity}).
  *
- * Lives under `MB\Core\Config` for historical reasons; discovery targets `MB\Bitrix\Config\Entity`.
+ * Discovery targets classes under `MB\Bitrix\Config\Entity`.
  */
 class ConfigLocator
 {
@@ -35,7 +35,7 @@ class ConfigLocator
     public static function getConfigByPath(string $path, string $baseName)
     {
         $result = array_column(
-            Filesystem::classFinder()->extends($path, BitrixConfigEntity::getClassName()),
+            app('filesystem')->classFinder()->extends($path, BitrixConfigEntity::getClassName()),
             'class'
         );
 

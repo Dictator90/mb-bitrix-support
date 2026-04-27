@@ -1,24 +1,20 @@
-## Ядро приложения `Foundation\Application`
+# Ядро приложения `Foundation\Application`
 
 Файл: `src/Foundation/Application.php`  
-Пространство имён: `MB\Bitrix\Foundation`
+Пространство имен: `MB\Bitrix\Foundation`
 
-Сопоставление с привычными идеями Laravel (без пакетов `illuminate/*`): [`laravel-parity.md`](laravel-parity.md).
+`Application` - это ядро пакета: контейнер зависимостей + жизненный цикл провайдеров + интеграция с Bitrix.
 
-Класс `Application` — это **ядро mb-bitrix-support**, объединяющее:
+## Что делает `Application`
 
-- DI‑контейнер (`MB\Container\Container`);
-- интеграцию с Bitrix (`CMain`, `Bitrix\Main\Application`, пути проекта);
-- систему сервис‑провайдеров и отложенных (deferred) сервисов;
-- события жизненного цикла ядра.
+- наследует `MB\Container\Container`;
+- регистрирует базовые биндинги (`app`, `config`, пути `path.*`);
+- подключает базовые провайдеры пакета;
+- поддерживает deferred-провайдеры;
+- управляет `boot`-циклом приложения;
+- публикует события ядра (`onBuildKernelApplication`, `onBeforeBootKernelApplication`, `onAfterBootKernelApplication`).
 
-На практике `Application` выступает в роли **единой точки входа** для сервисов пакета и модулей Bitrix.
-
----
-
-## Жизненный цикл `Application`
-
-Рекомендуемая последовательность инициализации:
+## Инициализация
 
 ```php
 use MB\Bitrix\Foundation\Application;
@@ -27,165 +23,106 @@ $app = new Application();
 
 $app
     ->setBasePath($_SERVER['DOCUMENT_ROOT'] . '/local') // опционально
-    // регистрация собственных провайдеров
     ->register(\App\Providers\AppServiceProvider::class)
     ->registerDeferred(\App\Providers\DeferredServiceProvider::class);
-
-// загрузка всех оставшихся отложенных провайдеров (по необходимости)
-// $app->loadDeferredProviders();
 
 $app->boot();
 ```
 
-Ключевые этапы:
+Важно: в конструкторе **нет eager `compile()`**.  
+Контейнер работает в lazy-режиме; при необходимости предкомпиляцию вызывают отдельно (`compile()` / `compileToFile()` на уровне приложения).
 
-- **Конструктор**:
-  - регистрирует события ядра (`registerEvents()`),
-  - настраивает базовые биндинги (`registerBaseBindings()`),
-  - регистрирует базовые провайдеры (`registerBaseServiceProviders()`),
-  - настраивает алиасы контейнера (`registerCoreContainerAliases()`),
-  - компилирует контейнер (`compile()`),
-  - отправляет событие `ON_BUILD_KERNEL_APPLICATION_EVENT`.
-- **Конфигурация путей** (`setBasePath()`):
-  - задаёт базовый путь проекта;
-  - подмешивает PHP-конфиги из каталога **`{basePath}/config/*.php`** в репозиторий, доступный как `app('config')` и хелперу `config()` (см. [`laravel-parity.md`](laravel-parity.md));
-  - через `bindPathsInContainer()` регистрирует сервисы:
-    - `path.local` — `DOCUMENT_ROOT . '/local'`,
-    - `path.bitrix` — `DOCUMENT_ROOT . '/bitrix'`,
-    - `path.template` — `SITE_TEMPLATE_PATH` (если определён),
-    - `path.front` — путь к фронтенду из опции `kernel.options.front_path`.
-- **Регистрация провайдеров** (`register()` / `registerDeferred()`):
-  - обычные провайдеры конфигурируют контейнер сразу;
-  - отложенные провайдеры регистрируются только в карте `$deferredServices`.
-- **Запуск** (`boot()`):
-  - отправляет событие `ON_BEFORE_BOOT_KERNEL_APPLICATION_EVENT`;
-  - выполняет boot‑колбэки приложения;
-  - вызывает `boot()` у всех зарегистрированных провайдеров и их boot‑колбэки;
-  - выполняет booted‑колбэки приложения;
-  - отправляет событие `ON_AFTER_BOOT_KERNEL_APPLICATION_EVENT`;
-  - устанавливает флаг `$hasBeenBootstrapped = true`.
+## Жизненный цикл и флаги
 
-Флаг `hasBeenBootstrapped()` позволяет понять, инициализировалось ли ядро хотя бы один раз.
+### Конструктор
 
----
+При `new Application()` выполняются:
 
-## События жизненного цикла ядра
+1. регистрация событий ядра;
+2. базовые биндинги и path-сервисы;
+3. регистрация базовых провайдеров;
+4. регистрация container aliases;
+5. событие `onBuildKernelApplication`.
 
-`Application` использует `BitrixEventsObservableTrait` и генерирует три основных события в области `mb.core`:
+### Boot
 
-- **`ON_BUILD_KERNEL_APPLICATION_EVENT`**  
-  Отправляется в конструкторе (`attachEvents()`), когда:
-  - базовые биндинги и провайдеры уже зарегистрированы,
-  - но `boot()` ещё не вызывался.
+`boot()` выполняется один раз:
 
-- **`ON_BEFORE_BOOT_KERNEL_APPLICATION_EVENT`**  
-  Отправляется в начале `boot()` — до boot‑колбэков и вызова `boot()` у провайдеров.
+1. событие `onBeforeBootKernelApplication`;
+2. `booting` callbacks приложения;
+3. `boot()` у зарегистрированных провайдеров;
+4. `booted` callbacks приложения;
+5. событие `onAfterBootKernelApplication`.
 
-- **`ON_AFTER_BOOT_KERNEL_APPLICATION_EVENT`**  
-  Отправляется в конце `boot()` — после того как:
-  - все провайдеры загружены и отбутованы,
-  - выполнены booted‑колбэки приложения.
+После успешного `boot()`:
 
-Подписчики получают в payload ключ `app` с экземпляром `Application`, что позволяет:
+- `isBooted() === true`;
+- `hasBeenBootstrapped() === true` (флаг означает, что `boot()` уже завершался хотя бы один раз).
 
-- регистрировать дополнительные сервисы;
-- модифицировать конфигурацию контейнера;
-- выполнять интеграционные действия на разных этапах загрузки.
+## Провайдеры
 
----
+### Обычные
 
-## Интеграция с Bitrix
+`register()`:
 
-В `registerBaseBindings()` настраиваются ключевые биндинги:
+- создает/принимает экземпляр провайдера;
+- вызывает `register()`;
+- применяет `$bindings` и `$singletons` из провайдера;
+- помечает провайдер как зарегистрированный;
+- вызывает callbacks из `registered(...)`;
+- если приложение уже booted - сразу вызывает `boot()` провайдера.
 
-- `app` → экземпляр `Application` (singleton);
-- `asset` → `MB\Bitrix\Page\Asset` (через синглтон `Asset::getInstance()`);
-- `filesystem` → `MB\Bitrix\Filesystem` (`MB\Filesystem\Contracts\Filesystem`);
-- `module` → `MB\Bitrix\Module\Entity` (`MB\Bitrix\Contracts\Module\Entity`);
-- миграции: alias `migration.facade` → `MB\Bitrix\Migration\Facade`;
-- Bitrix‑объекты:
-  - `bitrix.cmain` → глобальный `$APPLICATION`;
-  - `bitrix.application` → `Bitrix\Main\Application::getInstance()`;
-  - `bitrix.context`, `bitrix.request`, `bitrix.cache` — обёртки вокруг текущего контекста и кеша.
+`registered(callable $callback)` вызывается на каждый успешный `register()`.  
+Зависимости callback резолвятся через `Application::call()`, можно type-hint:
 
-Дополнительно есть метод:
+- `MB\Bitrix\Foundation\Application $app`
+- `MB\Bitrix\Foundation\ServiceProvider $provider`
 
-- **`registerModule(string $moduleId): void`**
-  - регистрирует:
-    - `$moduleId:module` — сущность модуля (`ModuleEntityContract`);
-    - `$moduleId:config` — конфигурацию модуля;
-    - `$moduleId:migration` — фасад миграций для модуля.
+### Deferred
 
-Это упрощает работу модулей Bitrix, позволяя получать их сервисы напрямую из контейнера.
+`registerDeferred()` только наполняет карту `serviceId -> ProviderClass`.
 
----
+Провайдер регистрируется лениво:
 
-## Провайдеры и отложенные сервисы
+- при `make($serviceId)` через `loadDeferredProviderIfNeeded()`;
+- либо принудительно через `loadDeferredProviders()`.
 
-`Application` использует абстрактный `Foundation\ServiceProvider` для конфигурации контейнера.
+## Разрешение сервисов и `makeWith`
 
-### Обычная регистрация
+`make(string $abstract, array $parameters = [])`:
 
-```php
-$app->register(\App\Providers\AppServiceProvider::class);
-```
+- для обычного резолва использует родительский контейнер;
+- для непустых параметров идет в `buildWithParameters()` (поведение в стиле `makeWith`).
 
-- провайдер создаётся (`resolveProvider()`),
-- вызывается его `register()`,
-- применяются массивы `$bindings` и `$singletons` (если объявлены),
-- при необходимости вызывается `boot()` и boot‑колбэки (если приложение уже booted).
+`makeWith(...)` - alias к `make(..., $parameters)`.
 
-### Отложенная (deferred) регистрация
+В `buildWithParameters()` используется стратегия:
 
-Для ленивых сервисов используется связка:
+1. быстрый путь: если `$abstract` уже class-string, используется он;
+2. fallback: alias/binding lookup в контейнере;
+3. сбор аргументов конструктора из:
+   - `$parameters` по имени,
+   - type-hint зависимостей из контейнера,
+   - значений по умолчанию.
 
-- метод провайдера `provides(): array<int, string>` — список id сервисов, которые он предоставляет;
-- метод приложения `registerDeferred(ServiceProvider|string $provider)`:
-  - не вызывает `register()` немедленно;
-  - заполняет карту `$deferredServices` вида `['serviceId' => ProviderClass::class]`.
+## Риск и план снижения зависимости от reflection
 
-Когда из контейнера запрашивается сервис:
+Сейчас fallback для alias/binding lookup опирается на reflection к внутренним registry родительского контейнера.  
+Это оставлено для обратной совместимости с текущим `mb4it/container`, но рекомендуется следующий план:
 
-- `make()`/`get()` вызывают `loadDeferredProviderIfNeeded($abstract)`;
-- если `$abstract` есть в `$deferredServices` и ещё не был разрешён, вызывается `loadDeferredProvider()`:
-  - создаёт экземпляр провайдера;
-  - регистрирует его через `registerDeferredProvider()` и при необходимости планирует `boot()` на этапе `boot()`.
+1. добавить в `mb4it/container` публичный API для чтения alias/concrete metadata;
+2. перевести `Application` на этот API;
+3. удалить reflection fallback после выравнивания минимальной версии зависимости.
 
-Это позволяет **не создавать тяжёлые сервисы**, пока они реально не понадобятся.
+До этого момента любые изменения в internals `mb4it/container` должны сопровождаться тестами `Application`.
 
----
+## Module-сценарий
 
-## `Application` как фасад контейнера
+`registerModule($moduleId)` регистрирует:
 
-Помимо стандартных операций контейнера (`bind`, `singleton`, `instance`, `make`, `get`) `Application` добавляет:
+- `$moduleId:module`
+- `$moduleId:config`
+- `$moduleId:migration`
+- `$moduleId:logger`
 
-- **`makeWith(string $abstract, array $parameters = []): mixed`**  
-  Создаёт объект с явной подстановкой аргументов конструктора.  
-  Внутри используется `buildWithParameters()`, который:
-  - учитывает параметры по имени;
-  - подставляет зависимости из контейнера по типам;
-  - использует значения по умолчанию, если они определены.
-
-- **`call(callable $callable, array $parameters = []): mixed`**  
-  Вызывает любую функцию/метод с автоподстановкой аргументов из контейнера по типам и именам параметров.
-
-- **`resolved(string $abstract): bool`**  
-  Позволяет проверить, был ли данный id уже разрешён (используется, в частности, в `ServiceProvider::callAfterResolving()`).
-
-Рекомендуется:
-
-- использовать `make()`/`get()` для обычных сервисов;
-- использовать `makeWith()` только там, где действительно нужны явные аргументы конструктора (например, сущности модулей/миграций);
-- использовать `call()` для колбэков, которые должны автоматически получать зависимости из контейнера.
-
----
-
-## Рекомендации по использованию
-
-- Создавайте **один экземпляр `Application` на запрос** и храните его как глобальное ядро (через `Application::setInstance()` / `getInstance()` или собственный bootstrap).
-- Регистрируйте все инфраструктурные сервисы и провайдеры в одном месте (bootstrap‑файл/модуль), а в остальном коде запрашивайте только готовые зависимости из контейнера.
-- Для тяжёлых или редко используемых сервисов:
-  - выносите их в отдельные `ServiceProvider`;
-  - реализуйте `provides()` и регистрируйте через `registerDeferred()`.
-- Используйте события жизненного цикла (`ON_BUILD_KERNEL_APPLICATION_EVENT`, `ON_BEFORE_BOOT_KERNEL_APPLICATION_EVENT`, `ON_AFTER_BOOT_KERNEL_APPLICATION_EVENT`) для интеграции с Bitrix и сторонними модулями без жёстких связей с реализацией `Application`.
-
+и позволяет использовать `module('vendor.name')` и `app()->container('vendor.name')`.

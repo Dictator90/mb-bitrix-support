@@ -1,6 +1,6 @@
 <?php
 
-namespace MB\Core\Settings\Options;
+namespace MB\Bitrix\Settings\Options;
 
 use MB\Bitrix\UI\Base\Field\AbstractBaseField;
 use MB\Bitrix\UI\Base\Form\Base as FormBase;
@@ -15,7 +15,7 @@ use MB\Bitrix\UI\Control\Form\Bitrix as FormBitrix;
  * Предоставляет базовый функционал для создания и управления настройками модуля,
  * включая работу с формами, полями ввода и конфигурациями.
  *
- * @package MB\Core\Settings
+ * @package MB\Bitrix\Settings
  */
 abstract class Base
 {

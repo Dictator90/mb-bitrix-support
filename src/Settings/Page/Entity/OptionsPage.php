@@ -1,11 +1,11 @@
 <?php
 
-namespace MB\Core\Settings\Page\Entity;
+namespace MB\Bitrix\Settings\Page\Entity;
 
 use Bitrix\UI\Toolbar;
 use MB\Bitrix\Contracts\Module\Entity as ModuleEntityContract;
-use MB\Core\Settings\Builder;
-use MB\Core\Settings\Options;
+use MB\Bitrix\Settings\Builder;
+use MB\Bitrix\Settings\Options;
 use MB\Bitrix\UI\Base\Grid\Base as GridBase;
 use MB\Bitrix\UI\Base\Grid\EmptyGrid;
 
@@ -16,7 +16,7 @@ use MB\Bitrix\UI\Base\Grid\EmptyGrid;
  * с использованием системы опций, гридов MB UI и тулбара Bitrix UI.
  * Автоматически обрабатывает рендеринг через билдер настроек.
  *
- * @package MB\Core\Settings\Page\Entity
+ * @package MB\Bitrix\Settings\Page\Entity
  * @abstract
  */
 abstract class OptionsPage extends Base

@@ -1,6 +1,6 @@
 <?php
 
-namespace MB\Core\Settings\Page\Entity;
+namespace MB\Bitrix\Settings\Page\Entity;
 
 use MB\Bitrix\Contracts\Module\Entity as ModuleEntityContract;
 use MB\Bitrix\Contracts\Support\Renderable;
@@ -11,7 +11,7 @@ use MB\Bitrix\Contracts\Support\Renderable;
  * Предоставляет общий интерфейс и базовую реализацию для страниц,
  * которые могут быть отображены в интерфейсе управления системом.
  *
- * @package MB\Core
+ * @package MB\Bitrix
  * @subpackage Settings\Page\Entity
  * @abstract
  */

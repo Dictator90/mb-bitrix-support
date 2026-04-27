@@ -5,7 +5,7 @@ namespace MB\Bitrix\Traits;
 /**
  * Трейт для создания фабрики Singleton объектов
  *
- * @package MB\Core\Support\Traits
+ * @package MB\Bitrix\Support\Traits
  *
  */
 

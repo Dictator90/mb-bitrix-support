@@ -27,14 +27,16 @@
 ```json
 "autoload": {
   "psr-4": {
-    "MB\\Bitrix\\": "src/",
-    "MB\\Core\\": "src/"
+    "MB\\Bitrix\\": "src/"
   },
   "files": [
     "src/Support/helpers.php"
   ]
 }
 ```
+
+В текущей версии пакета публикуется только префикс `MB\\Bitrix\\`.  
+Все классы используют пространство имён `MB\Bitrix\` (исторические ссылки на `MB\Core\` могут встречаться в документации как архивные).
 
 См. также матрицу поддерживаемых подсистем: [`SUPPORTED.md`](SUPPORTED.md).  
 DI в духе Laravel **без** пакетов Illuminate: [`laravel-parity.md`](laravel-parity.md), пример bootstrap: [`examples/kernel-bootstrap.md`](examples/kernel-bootstrap.md).
@@ -95,6 +97,7 @@ if ($fileData) {
 
 Документация разбита на несколько файлов:
 
+- **`ui.md`** – UI-подсистема: формы, вкладки, поля, EntitySelector (подробно);
 - **`file-and-image.md`** – работа с файлами и изображениями;
 - **`storage-and-highloadblock.md`** – надстройка над ORM и Highload-блоками;
 - **`migrations.md`** – миграции и менеджеры сущностей;
@@ -126,6 +129,7 @@ flowchart LR
   mbBitrix --> agentLayer[Agent]
   mbBitrix --> eventLayer[Event]
   mbBitrix --> iblockLayer[Iblock]
+  mbBitrix --> uiLayer[UI]
 
   fileLayer --> imageLayer
   storageLayer --> hlLayer
@@ -133,6 +137,7 @@ flowchart LR
   componentLayer --> loggingLayer
   componentLayer --> storageLayer
   loggingLayer --> mb4itDeps["mb4it/*, psr/log"]
+  uiLayer --> componentLayer
 ```
 
 Краткое описание подсистем:
@@ -143,6 +148,7 @@ flowchart LR
 - **Log** – единый интерфейс логирования в файл, журнал событий и панель уведомлений;
 - **Agent / Event** – регистрация и обслуживание агентов и обработчиков событий;
 - **Iblock** – утилиты для инфоблоков и пользовательских типов полей;
+- **UI** – формы, вкладки, поля (20+ типов), EntitySelector (5 провайдеров), гриды — см. [`ui.md`](ui.md);
 - **Finder / Traits / Utils** – служебные классы и трейты, используемые внутри других частей пакета.
 
 ---
@@ -151,6 +157,7 @@ flowchart LR
 
 Для детального описания и примеров использования откройте соответствующие файлы:
 
+- **UI-подсистема** – [`ui.md`](ui.md) (формы, вкладки, 20+ типов полей, EntitySelector, гриды);
 - работа с файлами и изображениями – [`file-and-image.md`](file-and-image.md);
 - ORM, хранилище и Highload-блоки – [`storage-and-highloadblock.md`](storage-and-highloadblock.md), [`storage-advanced.md`](storage-advanced.md);
 - миграции – [`migrations.md`](migrations.md);

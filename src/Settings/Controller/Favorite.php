@@ -1,6 +1,6 @@
 <?php
 
-namespace MB\Core\Settings\Controller;
+namespace MB\Bitrix\Settings\Controller;
 
 use Bitrix\Main\Error;
 use Bitrix\Main\Request;

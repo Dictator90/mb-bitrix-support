@@ -1,11 +1,11 @@
 <?php
 
-namespace MB\Core\Settings\Page;
+namespace MB\Bitrix\Settings\Page;
 
 use Bitrix\Main\Context;
 use Bitrix\Main\HttpRequest;
 use MB\Bitrix\Contracts\Module\Entity as ModuleEntityContract;
-use MB\Core\Settings\Page\Entity\Base;
+use MB\Bitrix\Settings\Page\Entity\Base;
 use MB\Support\Collection;
 
 class PageManager

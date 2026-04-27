@@ -43,7 +43,7 @@ use MB\Support\Str;
  *  </code>
  *
  * @see Condition for isProperty
- * @package MB\Core\Support
+ * @package MB\Bitrix\Support
  */
 
 trait FluentTrait

@@ -12,7 +12,7 @@ use Bitrix\Main\Web\Uri;
 use MB\Bitrix\Contracts\Module\Entity as ModuleEntityContract;
 use MB\Bitrix\Support\Data\TextString;
 use MB\Bitrix\UI\Control\TabSet\BitrixTabSet;
-use MB\Core\Settings\Options;
+use MB\Bitrix\Settings\Options;
 use MB\Bitrix\UI\Base as UiBase;
 use MB\Bitrix\UI\Base\Field;
 use MB\Bitrix\UI\Base\Row;

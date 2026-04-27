@@ -1,6 +1,6 @@
 <?php
 
-namespace MB\Core\Settings\Contracts;
+namespace MB\Bitrix\Settings\Contracts;
 
 interface PageInterface
 {

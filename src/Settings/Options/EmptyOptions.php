@@ -1,6 +1,6 @@
 <?php
 
-namespace MB\Core\Settings\Options;
+namespace MB\Bitrix\Settings\Options;
 
 use Bitrix\Main\ArgumentException;
 

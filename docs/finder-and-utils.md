@@ -1,10 +1,10 @@
 ## Утилиты и поиск классов
 
-Помимо крупных подсистем (файлы, HL-блоки, миграции и т.п.), пакет содержит набор небольших, но полезных утилит:
+Помимо крупных подсистем (файлы, HL-блоки, миграции, UI), пакет содержит набор небольших, но полезных утилит:
 
 - поиск классов через `MB\Bitrix\Filesystem\Filesystem::classFinder()` (mb4it/filesystem);
 - трейты для кэширования `MB\Bitrix\Traits\Cacheable` и `MB\Bitrix\Traits\RememberCachable`;
-- (см. также разделы `storage-advanced.md`, `logging-and-events.md`, где эти утилиты используются).
+- (см. также разделы `storage-advanced.md`, `logging-and-events.md`, `ui.md`, где эти утилиты используются).
 
 ---
 

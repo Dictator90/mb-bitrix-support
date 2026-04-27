@@ -1,6 +1,6 @@
 <?php
 
-namespace MB\Core\Settings\Page;
+namespace MB\Bitrix\Settings\Page;
 
 class Page404 extends Entity\ContentPage
 {

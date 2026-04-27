@@ -6,13 +6,11 @@ use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager as BitrixModuleManager;
-use MB\Core\Config\ConfigLocator;
+use MB\Bitrix\Config\ConfigLocator;
 use MB\Bitrix\Contracts\Module\Entity as ModuleEntityContract;
 use MB\Bitrix\Contracts\Config\Entity as ConfigEntityContract;
 use MB\Bitrix\Config\Entity as ConfigEntity;
 use MB\Bitrix\Migration\Facade as MigrationFacade;
-use MB\Bitrix\Page\Asset;
-use MB\Core\Settings\Page\PageManager;
 use MB\Bitrix\Support\Facades\Filesystem as Fs;
 use MB\Support\Str;
 use Exception;
@@ -23,11 +21,19 @@ use Exception;
  * Класс предоставляет функционал для управления модулями, получения информации о модуле,
  * работы с путями, конфигурациями и миграциями.
  *
- * @package MB\Core
+ * @package MB\Bitrix
  *
  */
 class Entity implements ModuleEntityContract
 {
+    /**
+     * Во время {@see __construct} сюда кладётся экземпляр, чтобы {@see module()} не шёл в контейнер
+     * повторно (иначе {@see \MB\Container\Container::make} ловит re-entrant по тому же abstract и падает с circular).
+     *
+     * @var array<string, self>
+     */
+    private static array $constructionStack = [];
+
     protected string $id;
 
     /** @var string|null Абсолютный путь к директории модуля */
@@ -52,7 +58,22 @@ class Entity implements ModuleEntityContract
     public function __construct(string $id)
     {
         $this->id = Str::lower(Str::trim($id));
-        $this->fillCommonProperties();
+        self::$constructionStack[$this->id] = $this;
+        try {
+            $this->fillCommonProperties();
+        } finally {
+            unset(self::$constructionStack[$this->id]);
+        }
+    }
+
+    /**
+     * Экземпляр модуля, который сейчас в процессе создания (для {@see module()} при re-entry из init.php).
+     */
+    public static function peekDuringConstruction(string $id): ?self
+    {
+        $id = Str::lower(Str::trim($id));
+
+        return self::$constructionStack[$id] ?? null;
     }
 
     public function getId(): string

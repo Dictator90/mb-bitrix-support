@@ -12,8 +12,8 @@ final class ServiceProvider extends BaseServiceProvider
 {
     public function register(): void
     {
+        $this->app->singleton('filesystem', fn () => Filesystem::instance());
         $this->app->alias('filesystem', FilesystemContract::class);
-        $this->app->singleton(FilesystemContract::class, fn () => Filesystem::instance());
     }
 }
 

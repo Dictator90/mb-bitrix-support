@@ -1,6 +1,6 @@
 <?php
 
-namespace MB\Core\Settings\Page\Entity;
+namespace MB\Bitrix\Settings\Page\Entity;
 
 use Bitrix\Main\ORM\Entity;
 use MB\Bitrix\EntityView\Builder;
@@ -12,7 +12,7 @@ use MB\Bitrix\EntityView\Builder;
  * отображающих данные ORM-сущностей Bitrix через построитель представлений.
  * Автоматически устанавливает заголовок страницы и создает контейнер для контента.
  *
- * @package MB\Core\Settings\Page\Entity
+ * @package MB\Bitrix\Settings\Page\Entity
  * @abstract
  */
 abstract class EntityViewPage extends Base

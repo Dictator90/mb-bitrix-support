@@ -5,7 +5,7 @@ namespace MB\Bitrix\Traits;
 /**
  * Трейт для реализации паттерна Singleton
  *
- * @package MB\Core\Support\Traits
+ * @package MB\Bitrix\Support\Traits
  */
 
 trait SingletonTrait

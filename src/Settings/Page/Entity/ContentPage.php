@@ -1,6 +1,6 @@
 <?php
 
-namespace MB\Core\Settings\Page\Entity;
+namespace MB\Bitrix\Settings\Page\Entity;
 
 /**
  * Абстрактный класс для создания страниц с контентом
@@ -9,7 +9,7 @@ namespace MB\Core\Settings\Page\Entity;
  * Классы-потомки должны реализовать метод getContent() для определения
  * конкретного содержимого страницы.
  *
- * @package MB\Core
+ * @package MB\Bitrix
  * @subpackage Settings\Page\Reference
  * @abstract
  */

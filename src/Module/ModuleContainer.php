@@ -7,7 +7,7 @@ namespace MB\Bitrix\Module;
 use MB\Bitrix\Contracts\Module\Entity as ModuleEntityContract;
 use MB\Bitrix\Foundation\Application;
 use MB\Bitrix\Migration\Facade as MigrationFacade;
-use MB\Core\Settings\Page\PageManager;
+use MB\Bitrix\Settings\Page\PageManager;
 
 /**
  * Per-module bindings resolved from {@see Application} (module id → services).

@@ -17,10 +17,9 @@ Several internal `mb4it/*` packages are pinned `@dev` today; for public consumpt
 
 ## Autoload
 
-Composer maps both:
+Composer maps:
 
 - `MB\Bitrix\` → `src/`
-- `MB\Core\` → `src/` (legacy-aligned settings/config pages under `MB\Core\Settings`, `MB\Core\Config`, …)
 
 A small **`app()`** helper is registered from `src/Support/helpers.php`; it delegates to `MB\Bitrix\Foundation\Application::getInstance()` (you must bootstrap the application first).
 
@@ -29,9 +28,8 @@ A small **`app()`** helper is registered from `src/Support/helpers.php`; it dele
 | Prefix | Role | Semver |
 |--------|------|--------|
 | **`MB\Bitrix\`** | Primary public API (Storage, Module, Migration, Foundation, most Config types, etc.). Prefer `use` statements from this tree for new code. | Breaking changes follow semver for documented public entrypoints. |
-| **`MB\Core\`** | Same repository, same `src/` directory (second PSR‑4 root). Used today for **settings/admin UI** (`MB\Core\Settings\*`) and **config discovery** (`MB\Core\Config\ConfigLocator`). Treated as **stable but Bitrix‑coupled** until a planned merge into `MB\Bitrix\` (no ETA in this package). | Breaking renames of `MB\Core\*` types will be noted in `CHANGELOG.md` and may align with a future major. |
 
-Dual PSR‑4 is intentional: one physical tree, two logical prefixes. See `docs/SUPPORTED.md` for subsystem support levels.
+Single PSR‑4 root is intentional. See `docs/SUPPORTED.md` for subsystem support levels.
 
 ## Documentation
 
@@ -40,6 +38,8 @@ Dual PSR‑4 is intentional: one physical tree, two logical prefixes. See `docs/
 - [Application bootstrap](docs/application.md)
 - [Migrations](docs/migrations.md)
 - [Storage / Highload](docs/storage-and-highloadblock.md)
+- [UI Components](docs/ui.md) - Forms, fields, tabs, EntitySelector
+- [Laravel-style DI](docs/laravel-parity.md)
 
 ## Matrix (high level)
 

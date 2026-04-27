@@ -1,9 +1,9 @@
 <?php
-namespace MB\Core\Settings\Controller;
+namespace MB\Bitrix\Settings\Controller;
 
 use Bitrix\Main\Error;
 use Bitrix\Main\UI\Extension;
-use MB\Core\Settings\Options\Base;
+use MB\Bitrix\Settings\Options\Base;
 use MB\Bitrix\UI\Control\TabSet\BitrixTabSet;
 use MB\Bitrix\UI\Control\Form\Bitrix as FormBitrix;
 

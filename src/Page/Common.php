@@ -1,5 +1,5 @@
 <?php
-namespace MB\Core\Page;
+namespace MB\Bitrix\Page;
 
 use Bitrix\Main\Application;
 use Bitrix\Main\Context;
