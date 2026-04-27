@@ -35,7 +35,7 @@ class ConfigLocator
     public static function getConfigByPath(string $path, string $baseName)
     {
         $result = array_column(
-            app('filesystem')->classFinder()->extends($path, BitrixConfigEntity::getClassName()),
+            Filesystem::classFinder()->extends($path, BitrixConfigEntity::getClassName()),
             'class'
         );
 
