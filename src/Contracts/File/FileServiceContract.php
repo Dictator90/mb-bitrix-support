@@ -9,7 +9,7 @@ use Bitrix\Main\ORM\Query\Result;
 /**
  * Контракт сервиса файлов Bitrix (b_file / D7 FileTable).
  *
- * Разрешение: {@see \app('file.service')} или {@see \MB\Bitrix\File\FileService::resolve()}.
+ * Разрешение: {@see \app('file.service')} или (container binding).
  */
 interface FileServiceContract
 {
@@ -69,3 +69,4 @@ interface FileServiceContract
 
     public function getContentType(string $path): string;
 }
+

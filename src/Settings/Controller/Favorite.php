@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MB\Bitrix\Settings\Controller;
 
 use Bitrix\Main\Error;
@@ -15,7 +17,7 @@ class Favorite extends \Bitrix\Main\Engine\Controller
      */
     protected $favoriteClass;
 
-    public function __construct(Request $request = null)
+    public function __construct(?Request $request = null)
     {
         parent::__construct($request);
         $this->favoriteClass = class_exists('\CAllFavorites') ? \CAllFavorites::class : \CFavorites::class;

@@ -1,25 +1,23 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MB\Bitrix\Storage\Concerns;
 
 use Bitrix\Main;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
-use MB\Support\Arr;
 use MB\Bitrix\Storage\Query;
+use MB\Support\Arr;
 
 trait DeleteByQueryTrait
 {
     /**
-     * Пакетное удаление записей по условию.
+     * Safe batch delete using ORM primary lookup instead of regex SQL rewriting.
      *
-     * @param array|Query|ConditionTree $parameters
-     * @return Main\Entity\DeleteResult
-     * @throws Main\SystemException
+     * @param array<string,mixed>|Query|ConditionTree $parameters
      */
-    public static function deleteWhere(array|Query|ConditionTree $parameters)
+    public static function deleteWhere(array|Query|ConditionTree $parameters): Main\Entity\DeleteResult
     {
-        $result = new Main\Entity\DeleteResult();
-
         if ($parameters instanceof ConditionTree) {
             $parameters = static::query()->where($parameters);
         }
@@ -27,20 +25,66 @@ trait DeleteByQueryTrait
         $query = $parameters instanceof Query
             ? $parameters
             : static::createBatchQuery($parameters);
+        /** @var Query $query */
 
-        try {
-            $selectSql = $query->getQuery();
+        $entity = static::getEntity();
+        $primaryFields = $entity->getPrimaryArray();
+        if ($primaryFields === []) {
+            throw new Main\ArgumentException('Entity has no primary fields.');
+        }
 
-            if (preg_match('/^SELECT\s.*?\s(FROM\s.*)$/si', $selectSql, $match)) {
-                $entity = static::getEntity();
-                $connection = $entity->getConnection();
-                $helper = $connection->getSqlHelper();
-                $sql = 'DELETE ' . $helper->quote($query->getInitAlias()) . ' ' . $match[1];
-                $connection->queryExecute($sql);
-            } else {
-                throw new Main\SystemException('invalid deleteBatch query');
+        $selectQuery = clone $query;
+        $selectQuery->setSelect($primaryFields);
+        $rows = $selectQuery->fetchAll();
+
+        if ($rows === []) {
+            return new Main\Entity\DeleteResult();
+        }
+
+        // Preserve the fast path for a simple primary key list.
+        if (count($primaryFields) === 1) {
+            $primary = $primaryFields[0];
+            $values = [];
+
+            foreach ($rows as $row) {
+                $value = self::extractRowValue($row, $primary);
+                if ($value !== null) {
+                    $values[] = $value;
+                }
             }
-        } catch (\Exception $exception) {
+
+            if ($values === []) {
+                return new Main\Entity\DeleteResult();
+            }
+
+            return static::deleteWherePrimary($values);
+        }
+
+        $result = new Main\Entity\DeleteResult();
+        $connection = $entity->getConnection();
+        $affected = 0;
+
+        $connection->startTransaction();
+        try {
+            foreach ($rows as $row) {
+                $primary = self::buildCompositePrimary($row, $primaryFields);
+                $deleteResult = static::delete($primary);
+                if (!$deleteResult->isSuccess()) {
+                    $result->addErrors($deleteResult->getErrors());
+                    continue;
+                }
+                $affected++;
+            }
+
+            if ($result->getErrors() !== []) {
+                $connection->rollbackTransaction();
+                return $result;
+            }
+
+            $connection->commitTransaction();
+            self::setAffectedRows($result, $affected);
+        } catch (\Throwable $exception) {
+            $connection->rollbackTransaction();
             throw $exception;
         }
 
@@ -48,13 +92,9 @@ trait DeleteByQueryTrait
     }
 
     /**
-     * Удаляет по первичным ключам.
-     *
-     * Для списка поддерживаются только простые (не составные) первичные ключи.
-     *
-     * @param int|array $data
+     * @param int|array<int,mixed>|array<string,mixed> $data
      */
-    public static function deleteWherePrimary(int|array $data)
+    public static function deleteWherePrimary(int|array $data): Main\Entity\DeleteResult
     {
         $entity = static::getEntity();
         $primaryFields = $entity->getPrimaryArray();
@@ -80,9 +120,10 @@ trait DeleteByQueryTrait
                     throw new Main\ArgumentException(sprintf('Missing primary field `%s` in primary list item.', $primaryField));
                 }
                 $values[] = $item[$primaryField];
-            } else {
-                $values[] = $item;
+                continue;
             }
+
+            $values[] = $item;
         }
 
         if ($values === []) {
@@ -91,5 +132,53 @@ trait DeleteByQueryTrait
 
         return static::deleteWhere(static::query()->whereIn($primaryField, $values));
     }
-}
 
+    /**
+     * @param array<string,mixed> $row
+     * @param list<string> $primaryFields
+     * @return array<string,mixed>
+     */
+    private static function buildCompositePrimary(array $row, array $primaryFields): array
+    {
+        $primary = [];
+
+        foreach ($primaryFields as $field) {
+            $value = self::extractRowValue($row, $field);
+            if ($value === null) {
+                throw new Main\SystemException(sprintf('Cannot resolve composite primary `%s` from query row.', $field));
+            }
+            $primary[$field] = $value;
+        }
+
+        return $primary;
+    }
+
+    /**
+     * @param array<string,mixed> $row
+     */
+    private static function extractRowValue(array $row, string $field): mixed
+    {
+        if (array_key_exists($field, $row)) {
+            return $row[$field];
+        }
+
+        $upper = mb_strtoupper($field);
+        if (array_key_exists($upper, $row)) {
+            return $row[$upper];
+        }
+
+        $lower = mb_strtolower($field);
+        if (array_key_exists($lower, $row)) {
+            return $row[$lower];
+        }
+
+        return null;
+    }
+
+    private static function setAffectedRows(Main\Entity\DeleteResult $result, int $affected): void
+    {
+        if (method_exists($result, 'setAffectedRowsCount')) {
+            $result->setAffectedRowsCount($affected);
+        }
+    }
+}

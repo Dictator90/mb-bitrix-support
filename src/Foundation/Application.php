@@ -1,9 +1,14 @@
 <?php
+
+declare(strict_types=1);
 namespace MB\Bitrix\Foundation;
 
 use Bitrix\Main\Application as BitrixApplication;
 use MB\Bitrix\Config\ArrayRepository as ConfigArrayRepository;
 use MB\Bitrix\Contracts\Config\Repository as ConfigRepositoryContract;
+use MB\Bitrix\Foundation\Orchestrator\BootOrchestrator;
+use MB\Bitrix\Foundation\Orchestrator\DeferredProviderOrchestrator;
+use MB\Bitrix\Foundation\Orchestrator\ProviderResolutionOrchestrator;
 use MB\Bitrix\ServiceProvider as BitrixServiceProvider;
 use MB\Bitrix\File\ServiceProvider as FileServiceProvider;
 use MB\Bitrix\Filesystem\ServiceProvider as FilesystemServiceProvider;
@@ -15,6 +20,7 @@ use MB\Bitrix\Module\Entity as ModuleEntity;
 use MB\Bitrix\Module\ModuleContainer;
 use MB\Bitrix\Module\ServiceProvider as ModuleServiceProvider;
 use MB\Bitrix\Page\Asset;
+use MB\Bitrix\AdminKit\Providers\AdminKitServiceProvider;
 use MB\Bitrix\Page\ServiceProvider as AssetServiceProvider;
 use MB\Bitrix\Traits\BitrixEventsObservableTrait;
 use MB\Container\AliasRegistry;
@@ -117,6 +123,10 @@ class Application extends Container
      */
     protected array $loadedProviders = [];
 
+    private readonly BootOrchestrator $bootOrchestrator;
+    private readonly DeferredProviderOrchestrator $deferredOrchestrator;
+    private readonly ProviderResolutionOrchestrator $providerResolutionOrchestrator;
+
     /**
      * Create a new Kernel Application instance.
      *
@@ -124,6 +134,9 @@ class Application extends Container
     public function __construct()
     {
         parent::__construct();
+        $this->bootOrchestrator = new BootOrchestrator();
+        $this->deferredOrchestrator = new DeferredProviderOrchestrator();
+        $this->providerResolutionOrchestrator = new ProviderResolutionOrchestrator();
         $this->registerEvents();
 
         $this->registerBaseBindings();
@@ -163,6 +176,7 @@ class Application extends Container
         $this->register(BitrixServiceProvider::class);
         $this->register(LoggerServiceProvider::class);
         $this->register(ModuleServiceProvider::class);
+        $this->register(AdminKitServiceProvider::class);
     }
 
     protected function registerEvents(): void
@@ -183,6 +197,11 @@ class Application extends Container
     protected function attachEvents(): void
     {
         $this->notify(self::ON_BUILD_KERNEL_APPLICATION_EVENT, ['app' => $this]);
+    }
+
+    public function dispatchKernelLifecycleEvent(string $event): void
+    {
+        $this->notify($event, ['app' => $this]);
     }
 
 
@@ -500,22 +519,13 @@ class Application extends Container
 
         $this->booting = true;
         try {
-            // Dispatch lifecycle event before booting callbacks and providers.
-            $this->notify(self::ON_BEFORE_BOOT_KERNEL_APPLICATION_EVENT, ['app' => $this]);
-
-            $this->fireAppCallbacks($this->bootingCallbacks);
-
-            array_walk($this->serviceProviders, function ($p) {
-                $this->bootProvider($p);
-            });
-
+            $this->bootOrchestrator->run(
+                $this,
+                $this->bootingCallbacks,
+                $this->serviceProviders,
+                $this->bootedCallbacks
+            );
             $this->booted = true;
-
-            $this->fireAppCallbacks($this->bootedCallbacks);
-
-            // Dispatch lifecycle event after all providers are booted.
-            $this->notify(self::ON_AFTER_BOOT_KERNEL_APPLICATION_EVENT, ['app' => $this]);
-
             $this->hasBeenBootstrapped = true;
         } finally {
             $this->booting = false;
@@ -552,7 +562,7 @@ class Application extends Container
         }
 
         if (is_string($provider)) {
-            $provider = $this->resolveProvider($provider);
+            $provider = $this->providerResolutionOrchestrator->resolveProvider($this, $provider);
         }
 
         $provider->register();
@@ -571,7 +581,11 @@ class Application extends Container
             }
         }
 
-        $this->markAsRegistered($provider);
+        $this->providerResolutionOrchestrator->markAsRegistered(
+            $this->serviceProviders,
+            $this->loadedProviders,
+            $provider
+        );
         $this->fireRegisteredCallbacks($provider);
 
         if ($this->isBooted() || $this->booting) {
@@ -593,19 +607,7 @@ class Application extends Container
      */
     public function registerDeferred(ServiceProvider|string $provider): ServiceProvider
     {
-        if (is_string($provider)) {
-            $providerInstance = $this->resolveProvider($provider);
-            $providerClass = $provider;
-        } else {
-            $providerInstance = $provider;
-            $providerClass = get_class($provider);
-        }
-
-        foreach ($providerInstance->provides() as $service) {
-            $this->deferredServices[$service] = $providerClass;
-        }
-
-        return $providerInstance;
+        return $this->deferredOrchestrator->registerDeferred($this, $this->deferredServices, $provider);
     }
 
     /**
@@ -616,9 +618,7 @@ class Application extends Container
      */
     public function getProvider($provider): ?ServiceProvider
     {
-        $name = is_string($provider) ? $provider : get_class($provider);
-
-        return $this->serviceProviders[$name] ?? null;
+        return $this->providerResolutionOrchestrator->getProvider($this->serviceProviders, $provider);
     }
 
     /**
@@ -629,9 +629,7 @@ class Application extends Container
      */
     public function getProviders($provider): array
     {
-        $name = is_string($provider) ? $provider : get_class($provider);
-
-        return array_values(array_filter($this->serviceProviders, fn ($value) => $value instanceof $name));
+        return $this->providerResolutionOrchestrator->getProviders($this->serviceProviders, $provider);
     }
 
     /**
@@ -642,7 +640,7 @@ class Application extends Container
      */
     public function resolveProvider($provider): ServiceProvider
     {
-        return new $provider($this);
+        return $this->providerResolutionOrchestrator->resolveProvider($this, $provider);
     }
 
     /**
@@ -653,9 +651,13 @@ class Application extends Container
      */
     protected function loadDeferredProviderIfNeeded(string $abstract): void
     {
-        if ($this->isDeferredService($abstract) && !$this->resolved($abstract)) {
-            $this->loadDeferredProvider($abstract);
-        }
+        $this->deferredOrchestrator->loadIfNeeded(
+            $this,
+            $this->deferredServices,
+            $this->loadedProviders,
+            $this->resolved,
+            $abstract
+        );
     }
 
     /**
@@ -750,13 +752,11 @@ class Application extends Container
      */
     public function loadDeferredProviders(): static
     {
-        // We will simply spin through each of the deferred providers and register each
-        // one and boot them if the application has booted. This should make each of
-        // the remaining services available to this application for immediate use.
-        foreach ($this->deferredServices as $service => $provider) {
-            $this->loadDeferredProvider($service);
-        }
-
+        $this->deferredOrchestrator->loadAll(
+            $this,
+            $this->deferredServices,
+            $this->loadedProviders
+        );
         $this->deferredServices = [];
         return $this;
     }
@@ -769,14 +769,12 @@ class Application extends Container
      */
     public function loadDeferredProvider($service): void
     {
-        if (! $this->isDeferredService($service)) {
-            return;
-        }
-
-        $provider = $this->deferredServices[$service];
-        if (! isset($this->loadedProviders[$provider])) {
-            $this->registerDeferredProvider($provider, $service);
-        }
+        $this->deferredOrchestrator->loadService(
+            $this,
+            $this->deferredServices,
+            $this->loadedProviders,
+            (string) $service
+        );
     }
 
     /**
@@ -792,7 +790,7 @@ class Application extends Container
             unset($this->deferredServices[$service]);
         }
 
-        $this->register(new $provider($this));
+        $this->registerResolvedProvider((string) $provider);
     }
 
     /**
@@ -815,7 +813,7 @@ class Application extends Container
      */
     public function isDeferredService(string $service): bool
     {
-        return isset($this->deferredServices[$service]);
+        return $this->deferredOrchestrator->isDeferredService($this->deferredServices, $service);
     }
 
     /**
@@ -828,5 +826,25 @@ class Application extends Container
     {
         $this->deferredServices = array_merge($this->deferredServices, $services);
         return $this;
+    }
+
+    public function resolveProviderClass(string $provider): ServiceProvider
+    {
+        return $this->providerResolutionOrchestrator->resolveProvider($this, $provider);
+    }
+
+    public function registerResolvedProvider(string $provider): void
+    {
+        $this->register(new $provider($this));
+    }
+
+    public function bootRegisteredProvider(ServiceProvider $provider): static
+    {
+        return $this->bootProvider($provider);
+    }
+
+    public function markBooted(): void
+    {
+        $this->booted = true;
     }
 }

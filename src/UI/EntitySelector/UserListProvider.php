@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MB\Bitrix\UI\EntitySelector;
 
 use Bitrix\Intranet\Integration\Mail\EmailUser;
@@ -35,10 +37,12 @@ class UserListProvider extends BaseProvider
 
     protected function prepareOptions(array $options = []): void
     {
-        if (!$options['selected']) {
-            $this->options['selected'] = [];
-        } elseif (!is_array($options['selected'])) {
+        if (is_array($options['selected'] ?? null)) {
+            $this->options['selected'] = $options['selected'];
+        } elseif (isset($options['selected']) && $options['selected'] !== '') {
             $this->options['selected'] = [$options['selected']];
+        } else {
+            $this->options['selected'] = [];
         }
 
         if (isset($options['nameTemplate']) && is_string($options['nameTemplate'])) {
@@ -304,12 +308,12 @@ class UserListProvider extends BaseProvider
         return self::makeItems($users, array_merge($this->getOptions(), $options));
     }
 
-    public static function isIntranetUser(int $userId = null): bool
+    public static function isIntranetUser(?int $userId = null): bool
     {
         return self::hasUserRole($userId, 'intranet');
     }
 
-    public static function isExtranetUser(int $userId = null): bool
+    public static function isExtranetUser(?int $userId = null): bool
     {
         return self::hasUserRole($userId, 'extranet');
     }

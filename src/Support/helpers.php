@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use Bitrix\Main\Localization\Loc;
+use MB\Bitrix\Page\Asset;
 use MB\Bitrix\Contracts\Config\Repository as ConfigRepositoryContract;
 use MB\Bitrix\Contracts\Module\Entity as ModuleEntityContract;
 use MB\Bitrix\Foundation\Application;
@@ -53,4 +55,17 @@ if (! function_exists('module')) {
 
         return app("{$normalized}:module");
     }
+}
+
+if (! function_exists('__loc')) {
+    function __loc(string $code, ?array $replace = null, $fallback = null, ?string $lang = null): ?string
+    {
+        return Loc::getMessage($code, $replace, $lang) ?? $fallback;
+    }
+}
+
+function asset(): Asset
+{
+    /** @var Asset */
+    return app('asset');
 }

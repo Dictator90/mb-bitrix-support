@@ -1,9 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MB\Bitrix\Page;
 
 use Bitrix\Main\Application;
-use MB\Bitrix\Support\Facades\Filesystem as Fs;
+use MB\Bitrix\Filesystem\Filesystem;
 
 class Includer
 {
@@ -51,9 +53,9 @@ class Includer
             $templatePath = SITE_TEMPLATE_PATH . '/' . $rel_path;
             $defaultTemplatePath = BX_PERSONAL_ROOT . '/templates/.default/' . $rel_path;
 
-            if (Fs::exists($templatePath)) {
+            if (Filesystem::instance()->exists(Application::getDocumentRoot() . $templatePath)) {
                 $path = $templatePath;
-            } elseif (Fs::exists($defaultTemplatePath)) {
+            } elseif (Filesystem::instance()->exists(Application::getDocumentRoot() . $defaultTemplatePath)) {
                 $path = $defaultTemplatePath;
             } else {
                 $path = '/' . $rel_path;

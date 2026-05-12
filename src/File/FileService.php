@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MB\Bitrix\File;
 
 use Bitrix\Main;
@@ -14,9 +16,23 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Security;
 use Bitrix\Main\Type\DateTime as BitrixDateTime;
 use Bitrix\Main\Web;
+use MB\Bitrix\Bitrix\Adapters\ApplicationAdapter;
+use MB\Bitrix\Bitrix\Adapters\LocalizationAdapter;
+use MB\Bitrix\Bitrix\Adapters\QuotaAdapter;
+use MB\Bitrix\Contracts\Bitrix\ApplicationAdapter as ApplicationAdapterContract;
+use MB\Bitrix\Contracts\Bitrix\LocalizationAdapter as LocalizationAdapterContract;
+use MB\Bitrix\Contracts\Bitrix\QuotaAdapter as QuotaAdapterContract;
+use MB\Bitrix\Contracts\File\DuplicateResolver as DuplicateResolverContract;
+use MB\Bitrix\Contracts\File\FileRepository as FileRepositoryContract;
 use MB\Bitrix\Contracts\File\FileServiceContract;
+use MB\Bitrix\Contracts\File\MetadataReader as MetadataReaderContract;
+use MB\Bitrix\Contracts\File\Uploader as UploaderContract;
 use MB\Bitrix\Foundation\Application;
 use MB\Bitrix\Filesystem\Filesystem;
+use MB\Bitrix\File\Services\DuplicateResolver;
+use MB\Bitrix\File\Services\FileRepository;
+use MB\Bitrix\File\Services\MetadataReader;
+use MB\Bitrix\File\Services\Uploader;
 
 class FileService implements FileServiceContract
 {
@@ -25,6 +41,32 @@ class FileService implements FileServiceContract
 
     protected const CACHE_DIR = 'b_file';
     protected const UPLOAD_DIR = 'upload';
+
+    private readonly UploaderContract $uploader;
+    private readonly DuplicateResolverContract $duplicateResolver;
+    private readonly MetadataReaderContract $metadataReader;
+    private readonly FileRepositoryContract $fileRepository;
+    private readonly ApplicationAdapterContract $applicationAdapter;
+    private readonly QuotaAdapterContract $quotaAdapter;
+    private readonly LocalizationAdapterContract $localizationAdapter;
+
+    public function __construct(
+        ?UploaderContract $uploader = null,
+        ?DuplicateResolverContract $duplicateResolver = null,
+        ?MetadataReaderContract $metadataReader = null,
+        ?FileRepositoryContract $fileRepository = null,
+        ?ApplicationAdapterContract $applicationAdapter = null,
+        ?QuotaAdapterContract $quotaAdapter = null,
+        ?LocalizationAdapterContract $localizationAdapter = null,
+    ) {
+        $this->applicationAdapter = $applicationAdapter ?? new ApplicationAdapter();
+        $this->uploader = $uploader ?? new Uploader($this->applicationAdapter);
+        $this->duplicateResolver = $duplicateResolver ?? new DuplicateResolver();
+        $this->metadataReader = $metadataReader ?? new MetadataReader();
+        $this->fileRepository = $fileRepository ?? new FileRepository();
+        $this->quotaAdapter = $quotaAdapter ?? new QuotaAdapter();
+        $this->localizationAdapter = $localizationAdapter ?? new LocalizationAdapter();
+    }
 
     /**
      * Сохраняет файл в системе (аналог CFile::SaveFile)
@@ -45,12 +87,12 @@ class FileService implements FileServiceContract
         // Подготовка данных файла
         $preparedData = $this->prepareFileData($fileData, $savePath, $forceRandom, $skipExtension, $dirAdd);
         // Проверка дубликатов
-        if ($duplicate = $this->findDuplicate($preparedData['FILE_SIZE'], $preparedData['FILE_HASH'])) {
+        if ($duplicate = $this->duplicateResolver->find($preparedData['FILE_SIZE'], $preparedData['FILE_HASH'])) {
             return $this->handleDuplicate($duplicate, $preparedData);
         }
 
         // Сохранение физического файла
-        if (!$this->savePhysicalFile($preparedData)) {
+        if (!$this->uploader->save($preparedData)) {
             return null;
         }
 
@@ -156,7 +198,6 @@ class FileService implements FileServiceContract
             } catch (\Exception) {
                 // запрошенные ID без ответа БД останутся без ключа до блока ниже
             }
-
             foreach ($idsToFetch as $id) {
                 if (!array_key_exists($id, $result)) {
                     $result[$id] = null;
@@ -245,7 +286,7 @@ class FileService implements FileServiceContract
         if (!$file || empty($file['SRC'])) {
             return null;
         }
-        return Main\Loader::getDocumentRoot() . $file['SRC'];
+        return $this->applicationAdapter->getDocumentRoot() . $file['SRC'];
     }
 
     /**
@@ -259,16 +300,15 @@ class FileService implements FileServiceContract
                     return $file['tmp_name'];
                 }
             } catch (\Throwable) {
-                // если абстракция не смогла проверить путь, продолжим дальше
             }
         }
         if (isset($file['SRC']) && $file['SRC'] !== '') {
-            return Main\Loader::getDocumentRoot() . $file['SRC'];
+            return $this->applicationAdapter->getDocumentRoot() . $file['SRC'];
         }
         if (isset($file['SUBDIR'], $file['FILE_NAME'])) {
             $uploadDir = Option::get('main', 'upload_dir', self::UPLOAD_DIR);
             $relativePath = '/' . $uploadDir . '/' . $file['SUBDIR'] . '/' . $file['FILE_NAME'];
-            return Main\Loader::getDocumentRoot() . str_replace('//', '/', $relativePath);
+            return $this->applicationAdapter->getDocumentRoot() . str_replace('//', '/', $relativePath);
         }
         if (!empty($file['ID'])) {
             return $this->getFilePath((int)$file['ID']);
@@ -276,15 +316,6 @@ class FileService implements FileServiceContract
         return null;
     }
 
-    /**
-     * Преобразует различные форматы данных файла в единый массив-формат,
-     * пригодный для использования в методах загрузки файлов.
-     *
-     * @param mixed $file Может быть ID файла, массивом с данными файла или именем временного файла.
-     * @param string $source Источник данных (для обработки через события).
-     * @param string|null $site Сайт (не используется напрямую, но может участвовать в событиях).
-     * @return array|null Массив с данными файла или null при ошибке.
-     */
     public function makeFileArray(mixed $file, string $source = '', ?string $site = null): ?array
     {
         if ($file === null || $file === '') {
@@ -391,23 +422,23 @@ class FileService implements FileServiceContract
         $fileName = $this->transformFileName($fileData['name']);
 
         if (empty($fileName)) {
-            return GetMessage("FILE_BAD_FILENAME");
+            return $this->localizationAdapter->message('FILE_BAD_FILENAME', 'Invalid file name');
         }
 
         if (!$this->validateFilenameString($fileName)) {
-            return GetMessage("MAIN_BAD_FILENAME1");
+            return $this->localizationAdapter->message('MAIN_BAD_FILENAME1', 'Invalid file name');
         }
 
         if (mb_strlen($fileName) > 255) {
-            return GetMessage("MAIN_BAD_FILENAME_LEN");
+            return $this->localizationAdapter->message('MAIN_BAD_FILENAME_LEN', 'File name is too long');
         }
 
         if ($this->isUnsafeFileName($fileName)) {
-            return GetMessage("FILE_BAD_TYPE");
+            return $this->localizationAdapter->message('FILE_BAD_TYPE', 'Unsafe file type');
         }
 
         if (!$this->diskQuotaCheckUpload($fileData)) {
-            return GetMessage("FILE_BAD_QUOTA");
+            return $this->localizationAdapter->message('FILE_BAD_QUOTA', 'Disk quota exceeded');
         }
 
         return "";
@@ -418,7 +449,7 @@ class FileService implements FileServiceContract
         $fileName = $this->transformFileName($fileData['name'], $forceRandom, $skipExtension);
         $filePath = $this->generateFilePath($savePath, $fileName, $forceRandom, $dirAdd);
 
-        $imageInfo = $this->getImageInfo($fileData['tmp_name']);
+        $imageInfo = $this->metadataReader->imageInfo((string) ($fileData['tmp_name'] ?? ''));
 
         return [
             'FILE_NAME' => $fileName,
@@ -430,7 +461,7 @@ class FileService implements FileServiceContract
             'DESCRIPTION' => $fileData['description'] ?? '',
             'WIDTH' => $imageInfo['width'] ?? 0,
             'HEIGHT' => $imageInfo['height'] ?? 0,
-            'FILE_HASH' => $this->calculateFileHash($fileData),
+            'FILE_HASH' => $this->metadataReader->hash($fileData),
             'EXTERNAL_ID' => $fileData['external_id'] ?? md5(mt_rand()),
             'HANDLER_ID' => $fileData['HANDLER_ID'] ?? '',
             'physical_path' => $filePath['full_path'],
@@ -528,13 +559,13 @@ class FileService implements FileServiceContract
 
     protected function handleDuplicate(array $duplicate, array $preparedData): int
     {
-        return (int)$duplicate['FILE_ID'];
+        return $this->duplicateResolver->resolve($duplicate, $preparedData);
     }
 
     protected function enrichFileData(array $file): array
     {
         $file['SRC'] = $this->getFileSrc($file);
-        $file['FORMATTED_SIZE'] = $this->formatSize($file['FILE_SIZE']);
+        $file['FORMATTED_SIZE'] = $this->formatSize((int)$file['FILE_SIZE']);
         $file['IS_IMAGE'] = $this->isImage($file['FILE_NAME'], $file['CONTENT_TYPE']);
 
         return $file;
@@ -665,17 +696,8 @@ class FileService implements FileServiceContract
     protected function cleanCache(int $fileId): void
     {
         unset($this->fileDataCache[$fileId]);
-
-        if (defined('CACHED_b_file') && CACHED_b_file !== false) {
-            $cache = Main\Application::getInstance()->getManagedCache();
-            $bucketSize = (int)(defined('CACHED_b_file_bucket_size') ? CACHED_b_file_bucket_size : 10);
-            $bucket = (int)($fileId / $bucketSize);
-
-            $cache->clean(self::CACHE_DIR . '01' . $bucket, self::CACHE_DIR);
-            $cache->clean(self::CACHE_DIR . '11' . $bucket, self::CACHE_DIR);
-            $cache->clean(self::CACHE_DIR . '00' . $bucket, self::CACHE_DIR);
-            $cache->clean(self::CACHE_DIR . '10' . $bucket, self::CACHE_DIR);
-        }
+        $bucketSize = (int)(defined('CACHED_b_file_bucket_size') ? CACHED_b_file_bucket_size : 10);
+        $this->applicationAdapter->clearManagedFileCache($fileId, self::CACHE_DIR, $bucketSize);
     }
 
     protected function normalizeFilter(array $filter): array
@@ -697,55 +719,27 @@ class FileService implements FileServiceContract
 
     public function formatSize(int $size, int $precision = 2): string
     {
-        $units = ["b", "Kb", "Mb", "Gb", "Tb"];
-        $pos = 0;
-
-        while ($size >= 1024 && $pos < 4) {
-            $size /= 1024;
-            $pos++;
-        }
-
-        //todo: refactor
-        return round($size, $precision) . " " . Loc::getMessage("FILE_SIZE_" . $units[$pos]);
+        return $this->metadataReader->formatSize($size, $precision);
     }
 
     public function isImage(string $filename, string $mimeType = ''): bool
     {
-        $ext = $this->extractExtension($filename);
-        $imageExtensions = explode(",", "jpg,bmp,jpeg,jpe,gif,png,webp");
-
-        if (in_array($ext, $imageExtensions)) {
-            return Web\MimeType::isImage($mimeType);
-        }
-
-        return false;
+        return $this->metadataReader->isImage($filename, $mimeType);
     }
 
     public function getContentType(string $path): string
     {
-        if (function_exists("mime_content_type")) {
-            return mime_content_type($path) ?: 'unknown';
-        }
-
-        $ext = substr($path, strrpos($path, ".") + 1);
-        return Web\MimeType::getByFileExtension($ext) ?: 'unknown';
+        return $this->metadataReader->contentType($path);
     }
 
     protected function deletePhysicalFile(array $file): void
     {
-        $uploadDir = Option::get("main", "upload_dir", self::UPLOAD_DIR);
-        $filePath = $this->getDocumentRoot() . '/' . $uploadDir . '/' . $file['SUBDIR'] . '/' . $file['FILE_NAME'];
-
-        try {
-            Filesystem::instance()->delete($filePath);
-        } catch (\Throwable) {
-            // Игнорируем ошибки удаления, как и раньше
-        }
+        $this->uploader->delete($file);
     }
 
     protected function getDocumentRoot(): string
     {
-        return rtrim(Main\Loader::getDocumentRoot(), "/\\");
+        return $this->applicationAdapter->getDocumentRoot();
     }
 
     /**
@@ -873,11 +867,7 @@ class FileService implements FileServiceContract
      */
     protected function diskQuotaCheckUpload(array $fileData): bool
     {
-        if (!$this->isDiskQuotaEnabled()) {
-            return true;
-        }
-
-        return (new \CDiskQuota())->checkDiskQuota($fileData);
+        return $this->quotaAdapter->checkUpload($fileData);
     }
 
     /**
@@ -885,11 +875,7 @@ class FileService implements FileServiceContract
      */
     protected function diskQuotaNotifyInsert(int $fileSize): void
     {
-        if (!$this->isDiskQuotaEnabled()) {
-            return;
-        }
-
-        \CDiskQuota::updateDiskQuota('file', $fileSize, 'insert');
+        $this->quotaAdapter->notifyInsert($fileSize);
     }
 
     /**
@@ -897,34 +883,7 @@ class FileService implements FileServiceContract
      */
     protected function diskQuotaNotifyDelete(int $fileSize): void
     {
-        if (!$this->isDiskQuotaEnabled()) {
-            return;
-        }
-
-        \CDiskQuota::updateDiskQuota('file', $fileSize, 'delete');
+        $this->quotaAdapter->notifyDelete($fileSize);
     }
 
-    /**
-     * Resolve from kernel container, or a single fallback when Application is not set.
-     */
-    public static function resolve(): self
-    {
-        try {
-            return Application::getInstance()->make('file.service');
-        } catch (\Throwable) {
-            static $fallback = null;
-
-            return $fallback ??= new self();
-        }
-    }
-
-    /**
-     * Back-compat: FileService::method(...) delegates to {@see resolve()}.
-     *
-     * @param list<mixed> $arguments
-     */
-    public static function __callStatic(string $name, array $arguments): mixed
-    {
-        return self::resolve()->$name(...$arguments);
-    }
 }

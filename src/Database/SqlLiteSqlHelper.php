@@ -308,7 +308,7 @@ class SqlLiteSqlHelper extends SqlHelper
         return 'TEXT';
     }
 
-    public function getFieldByColumnType($name, $type, array $parameters = null): ScalarField
+    public function getFieldByColumnType($name, $type, ?array $parameters = null): ScalarField
     {
         $t = mb_strtolower((string) $type);
 

@@ -54,7 +54,7 @@ class Builder
         if ($this->langProvider !== null) {
             return $this->langProvider->getLang($code, $replace);
         }
-        return $code;
+        return __loc($code, $replace, fallback: $code);
     }
 
     /**

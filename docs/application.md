@@ -1,20 +1,11 @@
-# Ядро приложения `Foundation\Application`
+# Foundation Application
 
-Файл: `src/Foundation/Application.php`  
-Пространство имен: `MB\Bitrix\Foundation`
+File: `src/Foundation/Application.php`  
+Namespace: `MB\Bitrix\Foundation`
 
-`Application` - это ядро пакета: контейнер зависимостей + жизненный цикл провайдеров + интеграция с Bitrix.
+`Application` is the package kernel: DI container + provider lifecycle + Bitrix integration.
 
-## Что делает `Application`
-
-- наследует `MB\Container\Container`;
-- регистрирует базовые биндинги (`app`, `config`, пути `path.*`);
-- подключает базовые провайдеры пакета;
-- поддерживает deferred-провайдеры;
-- управляет `boot`-циклом приложения;
-- публикует события ядра (`onBuildKernelApplication`, `onBeforeBootKernelApplication`, `onAfterBootKernelApplication`).
-
-## Инициализация
+## Bootstrap Flow
 
 ```php
 use MB\Bitrix\Foundation\Application;
@@ -22,107 +13,52 @@ use MB\Bitrix\Foundation\Application;
 $app = new Application();
 
 $app
-    ->setBasePath($_SERVER['DOCUMENT_ROOT'] . '/local') // опционально
+    ->setBasePath($_SERVER['DOCUMENT_ROOT'] . '/local')
     ->register(\App\Providers\AppServiceProvider::class)
     ->registerDeferred(\App\Providers\DeferredServiceProvider::class);
 
 $app->boot();
 ```
 
-Важно: в конструкторе **нет eager `compile()`**.  
-Контейнер работает в lazy-режиме; при необходимости предкомпиляцию вызывают отдельно (`compile()` / `compileToFile()` на уровне приложения).
+## Lifecycle Events
 
-## Жизненный цикл и флаги
+Kernel-level events:
 
-### Конструктор
+- `onBuildKernelApplication`
+- `onBeforeBootKernelApplication`
+- `onAfterBootKernelApplication`
 
-При `new Application()` выполняются:
+## Orchestrators
 
-1. регистрация событий ядра;
-2. базовые биндинги и path-сервисы;
-3. регистрация базовых провайдеров;
-4. регистрация container aliases;
-5. событие `onBuildKernelApplication`.
+Lifecycle internals are split into dedicated orchestrators:
 
-### Boot
+- `BootOrchestrator` - boot callbacks, provider booting, before/after boot events.
+- `DeferredProviderOrchestrator` - deferred map registration and lazy loading.
+- `ProviderResolutionOrchestrator` - provider lookup, resolution, and registration bookkeeping.
 
-`boot()` выполняется один раз:
+`Application` remains the public entrypoint and delegates internal workflow to these components.
 
-1. событие `onBeforeBootKernelApplication`;
-2. `booting` callbacks приложения;
-3. `boot()` у зарегистрированных провайдеров;
-4. `booted` callbacks приложения;
-5. событие `onAfterBootKernelApplication`.
+## Deferred Providers
 
-После успешного `boot()`:
+`registerDeferred()` only stores service-to-provider mapping.
 
-- `isBooted() === true`;
-- `hasBeenBootstrapped() === true` (флаг означает, что `boot()` уже завершался хотя бы один раз).
+Provider registration happens when:
 
-## Провайдеры
+1. a deferred service is first resolved (`make()`),
+2. or `loadDeferredProviders()` is called explicitly.
 
-### Обычные
+## make / makeWith
 
-`register()`:
+`makeWith()` is an alias to `make($abstract, $parameters)`.
 
-- создает/принимает экземпляр провайдера;
-- вызывает `register()`;
-- применяет `$bindings` и `$singletons` из провайдера;
-- помечает провайдер как зарегистрированный;
-- вызывает callbacks из `registered(...)`;
-- если приложение уже booted - сразу вызывает `boot()` провайдера.
+For parameterized construction the kernel uses:
 
-`registered(callable $callback)` вызывается на каждый успешный `register()`.  
-Зависимости callback резолвятся через `Application::call()`, можно type-hint:
+1. direct class-string resolution,
+2. alias/binding resolution,
+3. constructor argument binding from explicit parameters, container type-hints, and defaults.
 
-- `MB\Bitrix\Foundation\Application $app`
-- `MB\Bitrix\Foundation\ServiceProvider $provider`
+## Stability Notes
 
-### Deferred
-
-`registerDeferred()` только наполняет карту `serviceId -> ProviderClass`.
-
-Провайдер регистрируется лениво:
-
-- при `make($serviceId)` через `loadDeferredProviderIfNeeded()`;
-- либо принудительно через `loadDeferredProviders()`.
-
-## Разрешение сервисов и `makeWith`
-
-`make(string $abstract, array $parameters = [])`:
-
-- для обычного резолва использует родительский контейнер;
-- для непустых параметров идет в `buildWithParameters()` (поведение в стиле `makeWith`).
-
-`makeWith(...)` - alias к `make(..., $parameters)`.
-
-В `buildWithParameters()` используется стратегия:
-
-1. быстрый путь: если `$abstract` уже class-string, используется он;
-2. fallback: alias/binding lookup в контейнере;
-3. сбор аргументов конструктора из:
-   - `$parameters` по имени,
-   - type-hint зависимостей из контейнера,
-   - значений по умолчанию.
-
-## Риск и план снижения зависимости от reflection
-
-Сейчас fallback для alias/binding lookup опирается на reflection к внутренним registry родительского контейнера.  
-Это оставлено для обратной совместимости с текущим `mb4it/container`, но рекомендуется следующий план:
-
-1. добавить в `mb4it/container` публичный API для чтения alias/concrete metadata;
-2. перевести `Application` на этот API;
-3. удалить reflection fallback после выравнивания минимальной версии зависимости.
-
-До этого момента любые изменения в internals `mb4it/container` должны сопровождаться тестами `Application`.
-
-## Module-сценарий
-
-`registerModule($moduleId)` регистрирует:
-
-- `$moduleId:module`
-- `$moduleId:config`
-- `$moduleId:migration`
-- `$moduleId:logger`
-
-и позволяет использовать `module('vendor.name')` и `app()->container('vendor.name')`.
+- Constructor does not call eager `compile()`.
+- `hasBeenBootstrapped()` indicates at least one successful `boot()` cycle.
+- `isBooted()` indicates current booted state.

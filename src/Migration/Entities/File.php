@@ -1,13 +1,15 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MB\Bitrix\Migration\Entities;
 
 use Bitrix\Main;
 use Bitrix\Main\Application;
 use Bitrix\Main\IO\Directory;
+use MB\Bitrix\Filesystem\Filesystem;
 use MB\Bitrix\Migration\Result;
 use MB\Bitrix\Migration\BaseEntity;
-use MB\Bitrix\Support\Facades\Filesystem as Fs;
 
 class File extends BaseEntity
 {
@@ -114,12 +116,12 @@ class File extends BaseEntity
 
     protected function sourceExists(string $fromDir): bool
     {
-        return Fs::isDirectory($this->documentRoot() . $fromDir);
+        return Filesystem::instance()->isDirectory($this->documentRoot() . $fromDir);
     }
 
     protected function targetExists(string $toDir): bool
     {
-        return Fs::isDirectory($this->documentRoot() . $toDir);
+        return Filesystem::instance()->isDirectory($this->documentRoot() . $toDir);
     }
 
     protected function unknownActionResult(string $action): Result
@@ -198,8 +200,8 @@ class File extends BaseEntity
 
     public function checkDir(string $path): Directory
     {
-        if (! Fs::isDirectory($this->documentRoot() . $path)) {
-            Fs::makeDirectory($path, 0755, true);
+        if (! Filesystem::instance()->isDirectory($this->documentRoot() . $path)) {
+            Filesystem::instance()->makeDirectory($this->documentRoot() . $path);
         }
 
         $dir = new Directory($this->documentRoot() . $path);

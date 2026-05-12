@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MB\Bitrix\HighloadBlock;
 
 use Bitrix\Highloadblock\HighloadBlockLangTable;
@@ -54,7 +56,7 @@ abstract class Base
     abstract public static function getLang(): array;
 
     protected function __clone() {}
-    protected function __wakeup() {}
+    public function __wakeup() {}
 
     public static function getInstance()
     {

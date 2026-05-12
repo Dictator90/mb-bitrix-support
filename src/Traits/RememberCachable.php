@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MB\Bitrix\Traits;
 
 /**
@@ -235,12 +237,4 @@ trait RememberCachable
         return $this->incrementCache($key, -$step);
     }
 
-    public static function __callStatic($name, $arguments)
-    {
-        if ($name === 'remember') {
-            return (new static())->remember(...$arguments);
-        }
-
-        return null;
-    }
 }

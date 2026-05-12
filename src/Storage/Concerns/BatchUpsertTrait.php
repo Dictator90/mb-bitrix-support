@@ -1,31 +1,25 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MB\Bitrix\Storage\Concerns;
 
 use Bitrix\Main;
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\Entity\AddResult;
-use Bitrix\Main\ArgumentException;
-use Bitrix\Main\SystemException;
 use MB\Bitrix\Storage\SqlHelper;
 
 trait BatchUpsertTrait
 {
     /**
-     * Пакетное добавление записей в таблицу (cross-platform UPSERT).
+     * Cross-platform batch add/upsert with deterministic field normalization.
      *
-     * Ведет себя как старая {@see \MB\Bitrix\Storage\Base::addBatch()},
-     * но SQL for duplicates строится через {@see SqlHelper}.
-     *
-     * @param array $dataList
-     * @param bool|array $updateOnDuplicate Если false - обычная вставка,
-     *                                      если true - обновление при дубликате всех полей кроме первичного ключа,
-     *                                      если array - список полей для обновления при дубликате.
-     * @return AddResult
-     * @throws ArgumentException
-     * @throws SqlQueryException|Main\SystemException
+     * @param array<int, array<string,mixed>> $dataList
+     * @param bool|array<int,string> $updateOnDuplicate
+     * @throws SqlQueryException|Main\SystemException|ArgumentException
      */
-    public static function addBatch(array $dataList, bool|array $updateOnDuplicate = false)
+    public static function addBatch(array $dataList, bool|array $updateOnDuplicate = false): AddResult
     {
         $result = new AddResult();
 
@@ -33,89 +27,151 @@ trait BatchUpsertTrait
             return $result;
         }
 
-        try {
-            /** @var Main\ORM\Entity $entity */
-            $entity = static::getEntity();
-            $fields = $entity->getFields();
-            $connection = $entity->getConnection();
-            $helper = $connection->getSqlHelper();
-            $tableName = $entity->getDBTableName();
+        $entity = static::getEntity();
+        $fields = $entity->getFields();
+        $connection = $entity->getConnection();
+        $helper = $connection->getSqlHelper();
+        $tableName = $entity->getDBTableName();
 
-            $sqlFieldPart = '';
-            $sqlValuePart = '';
-            $issetFieldsPart = false;
-            $usedFields = [];
+        $usedFields = self::collectAndValidateFields($dataList, $fields, $entity->getName());
+        if ($usedFields === []) {
+            return $result;
+        }
 
-            foreach ($dataList as $data) {
-                foreach ($data as $fieldName => $value) {
-                    if (!isset($fields[$fieldName])) {
-                        throw new ArgumentException(
-                            sprintf(
-                                '%s Entity has no `%s` field.',
-                                $entity->getName(),
-                                $fieldName
-                            ),
-                            $fieldName
-                        );
-                    }
+        [$sqlFieldPart, $sqlValuePart] = self::buildInsertParts(
+            $dataList,
+            $usedFields,
+            $fields,
+            $helper,
+            $tableName
+        );
 
-                    $field = $fields[$fieldName];
-                    $data[$fieldName] = $field->modifyValueBeforeSave($value, $data);
+        $primaryArray = $entity->getPrimaryArray();
+        $duplicateFields = self::resolveDuplicateFields(
+            $updateOnDuplicate,
+            $usedFields,
+            $primaryArray,
+            $connection,
+            $tableName
+        );
+        $doUpdate = $updateOnDuplicate !== false;
 
-                    if (!$issetFieldsPart) {
-                        $usedFields[] = $fieldName;
-                    }
-                }
+        $sql = SqlHelper::buildCrossPlatformUpsertSql(
+            $connection,
+            $tableName,
+            $sqlFieldPart,
+            $sqlValuePart,
+            $primaryArray,
+            $duplicateFields,
+            $doUpdate
+        );
 
-                $insert = $helper->prepareInsert($tableName, $data);
+        $connection->queryExecute($sql);
 
-                if (!$issetFieldsPart) {
-                    $issetFieldsPart = true;
-                    $sqlFieldPart = $insert[0];
-                }
-
-                $sqlValuePart .= ($sqlValuePart !== '' ? ',' . PHP_EOL : '') . '(' . $insert[1] . ')';
+        if (count($dataList) === 1 && !$doUpdate && method_exists($connection, 'getInsertedId') && method_exists($result, 'setId')) {
+            $insertedId = $connection->getInsertedId();
+            if (is_int($insertedId) && $insertedId > 0) {
+                $result->setId($insertedId);
             }
-
-            if (! $issetFieldsPart) {
-                return $result;
-            }
-
-            $primaryArray = $entity->getPrimaryArray();
-            $duplicateFields = [];
-            $doUpdate = $updateOnDuplicate !== false;
-
-            if ($doUpdate) {
-                if (is_array($updateOnDuplicate)) {
-                    $duplicateFields = $updateOnDuplicate;
-                } else {
-                    $tableFields = $connection->getTableFields($tableName);
-                    $primaryMap = array_flip($primaryArray);
-
-                    foreach ($usedFields as $fieldName) {
-                        if (!isset($primaryMap[$fieldName]) && isset($tableFields[$fieldName])) {
-                            $duplicateFields[] = $fieldName;
-                        }
-                    }
-                }
-            }
-
-            $sql = SqlHelper::buildCrossPlatformUpsertSql(
-                $connection,
-                $tableName,
-                $sqlFieldPart,
-                $sqlValuePart,
-                $primaryArray,
-                $duplicateFields,
-                $doUpdate
-            );
-
-            $connection->queryExecute($sql);
-        } catch (\Exception $e) {
-            throw $e;
         }
 
         return $result;
+    }
+
+    /**
+     * @param array<int, array<string,mixed>> $dataList
+     * @param array<string,mixed> $fields
+     * @return list<string>
+     */
+    private static function collectAndValidateFields(array $dataList, array $fields, string $entityName): array
+    {
+        $usedFields = [];
+
+        foreach ($dataList as $rowIndex => $row) {
+            foreach ($row as $fieldName => $_value) {
+                if (!isset($fields[$fieldName])) {
+                    throw new ArgumentException(
+                        sprintf('%s Entity has no `%s` field (row %d).', $entityName, $fieldName, $rowIndex),
+                        $fieldName
+                    );
+                }
+
+                if (!in_array($fieldName, $usedFields, true)) {
+                    $usedFields[] = $fieldName;
+                }
+            }
+        }
+
+        return $usedFields;
+    }
+
+    /**
+     * @param array<int, array<string,mixed>> $dataList
+     * @param list<string> $usedFields
+     * @param array<string,mixed> $fields
+     * @return array{0:string,1:string}
+     */
+    private static function buildInsertParts(
+        array $dataList,
+        array $usedFields,
+        array $fields,
+        object $helper,
+        string $tableName
+    ): array {
+        $sqlFieldPart = '';
+        $sqlValueParts = [];
+
+        foreach ($dataList as $row) {
+            $normalizedRow = [];
+
+            foreach ($usedFields as $fieldName) {
+                $field = $fields[$fieldName];
+                $value = $row[$fieldName] ?? null;
+                $normalizedRow[$fieldName] = $field->modifyValueBeforeSave($value, $row);
+            }
+
+            $insert = $helper->prepareInsert($tableName, $normalizedRow);
+            if ($sqlFieldPart === '') {
+                $sqlFieldPart = $insert[0];
+            }
+            $sqlValueParts[] = '(' . $insert[1] . ')';
+        }
+
+        return [$sqlFieldPart, implode(',' . PHP_EOL, $sqlValueParts)];
+    }
+
+    /**
+     * @param bool|array<int,string> $updateOnDuplicate
+     * @param list<string> $usedFields
+     * @param list<string> $primaryArray
+     * @return list<string>
+     */
+    private static function resolveDuplicateFields(
+        bool|array $updateOnDuplicate,
+        array $usedFields,
+        array $primaryArray,
+        object $connection,
+        string $tableName
+    ): array {
+        if ($updateOnDuplicate === false) {
+            return [];
+        }
+
+        if (is_array($updateOnDuplicate)) {
+            return array_values(array_unique($updateOnDuplicate));
+        }
+
+        $tableFields = $connection->getTableFields($tableName);
+        $primaryMap = array_flip($primaryArray);
+        $duplicateFields = [];
+
+        foreach ($usedFields as $fieldName) {
+            if (!isset($primaryMap[$fieldName]) && isset($tableFields[$fieldName])) {
+                $duplicateFields[] = $fieldName;
+            }
+        }
+
+        return $duplicateFields;
     }
 }
 

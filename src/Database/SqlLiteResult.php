@@ -24,7 +24,7 @@ class SqlLiteResult extends Result
     /**
      * @param PDOStatement|list<array<string, mixed>> $result
      */
-    public function __construct($result, Connection $dbConnection = null, SqlTrackerQuery $trackerQuery = null)
+    public function __construct($result, ?Connection $dbConnection = null, ?SqlTrackerQuery $trackerQuery = null)
     {
         if ($result instanceof PDOStatement) {
             if ($result->columnCount() > 0) {

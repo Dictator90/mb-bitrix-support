@@ -54,9 +54,11 @@ abstract class BaseComponent extends \CBitrixComponent implements Main\Errorable
         return $code;
     }
 
-    public function addError(string $text, int|string $code = 0, $customData = null): void
+    public function addError(string $text, int|string $code = 0, $customData = null): static
     {
         $this->errorCollection->setError(new Main\Error($text, $code, $customData));
+
+        return $this;
     }
 
     /** @return Main\Error[] */

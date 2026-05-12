@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 namespace MB\Bitrix\Contracts\Migration;
 
 use Bitrix\Main\Result;
@@ -10,9 +13,6 @@ interface Facade
 
     public function upStorages(): Result;
     public function downStorages(): Result;
-
-    public function upAgents(): Result;
-    public function downAgents(): Result;
 
     public function upEvents(): Result;
     public function downEvents(): Result;

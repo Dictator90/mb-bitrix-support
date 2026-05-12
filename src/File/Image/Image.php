@@ -1,4 +1,6 @@
 <?php
+
+declare(strict_types=1);
 namespace MB\Bitrix\File\Image;
 
 use Bitrix\Main\Loader;
@@ -69,7 +71,7 @@ class Image
 
     public function __construct(array|string|int $target, ?FileServiceContract $files = null)
     {
-        $files ??= FileService::resolve();
+        $files ??= $this->resolveFileService();
 
         if (is_array($target)) {
             $this->data = $target;
@@ -93,5 +95,17 @@ class Image
 
         // Позволяем расширять класс собственными методами
         return $this->$name(...$arguments);
+    }
+
+    private function resolveFileService(): FileServiceContract
+    {
+        try {
+            /** @var FileServiceContract $service */
+            $service = app('file.service');
+
+            return $service;
+        } catch (\Throwable) {
+            return new FileService();
+        }
     }
 }

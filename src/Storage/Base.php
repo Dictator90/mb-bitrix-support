@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MB\Bitrix\Storage;
 
 use Bitrix\Main;
@@ -37,9 +39,10 @@ abstract class Base extends DataManager
 {
     use BuildIndexes;
     use BatchUpsertTrait;
-    use UpdateByWhereTrait;
     use MassUpdateTrait;
-    use DeleteByQueryTrait;
+    use UpdateByWhereTrait, DeleteByQueryTrait {
+        UpdateByWhereTrait::extractRowValue insteadof DeleteByQueryTrait;
+    }
 
     public static function getClassName()
     {
@@ -133,7 +136,7 @@ abstract class Base extends DataManager
         return 'UNKNOWN';
     }
 
-    public static function getFieldEnumTitle($fieldName, $optionValue, Main\Entity\Field $field = null)
+    public static function getFieldEnumTitle($fieldName, $optionValue, ?Main\Entity\Field $field = null)
     {
         $result = null;
 
@@ -147,7 +150,7 @@ abstract class Base extends DataManager
             $optionValueLangKey = str_replace(['.', ' ', '-'], '_', $optionValue);
             $optionValueLangKey = Str::toUpper($optionValueLangKey);
 
-            $result = message($fieldEnumLangKey . $optionValueLangKey);
+            $result = __loc($fieldEnumLangKey . $optionValueLangKey);
         }
 
         if ($result === null) {

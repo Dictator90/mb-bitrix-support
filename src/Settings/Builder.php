@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MB\Bitrix\Settings;
 
 use Bitrix\Main\ArgumentException;
@@ -198,7 +200,7 @@ final class Builder
      * @param string|null $activeTab Идентификатор активной вкладки
      * @return void
      */
-    #[NoReturn] protected function savedRedirect(string $activeTab = null): void
+    #[NoReturn] protected function savedRedirect(?string $activeTab = null): void
     {
         $uri = new Uri(Context::getCurrent()->getRequest()->getRequestUri());
         $params = ['saved' => 1];

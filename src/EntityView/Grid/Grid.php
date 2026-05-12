@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MB\Bitrix\EntityView\Grid;
 
 use Bitrix\Main\Context;
@@ -86,12 +88,6 @@ class Grid extends GridBase
     {
         $this->dataProvider->setColumns($columns);
         return $this;
-    }
-
-    /** @deprecated Use setAvailableColumns() */
-    public function setAvailableColums(array $columns): static
-    {
-        return $this->setAvailableColumns($columns);
     }
 
     public function getAdditionalDataProviders(): array

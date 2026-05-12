@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MB\Bitrix\File\Image;
 
 use Bitrix\Main\SystemException;
@@ -61,7 +63,7 @@ class ImageBuilder
     public function __construct(int $fileId, ?ImageProcessor $processor = null, ?FileServiceContract $files = null)
     {
         $this->fileId = $fileId;
-        $this->files = $files ?? FileService::resolve();
+        $this->files = $files ?? $this->resolveFileService();
         $this->processor = $processor ?? new ImageProcessor(files: $this->files);
     }
 
@@ -269,5 +271,17 @@ class ImageBuilder
     public static function createWithProcessor(int $fileId, ImageProcessor $processor): self
     {
         return new self($fileId, $processor);
+    }
+
+    private function resolveFileService(): FileServiceContract
+    {
+        try {
+            /** @var FileServiceContract $service */
+            $service = app('file.service');
+
+            return $service;
+        } catch (\Throwable) {
+            return new FileService();
+        }
     }
 }

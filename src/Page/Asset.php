@@ -28,6 +28,17 @@ class Asset
     }
 
     /**
+     * @param string $path
+     * @param string $location
+     * @param $mode
+     * @return bool
+     */
+    public function addJsModuleDefer(string $path, string $location = Page\AssetLocation::AFTER_JS_KERNEL, $mode = null)
+    {
+        return $this->addJsAdvanced($path, ['type' => 'module', 'defer' => ''], $location, $mode);
+    }
+
+    /**
      * Add Async Js asset.
      *
      * @param string $str Added path.

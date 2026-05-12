@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MB\Bitrix\Module;
 
 use Bitrix\Main\Application;
@@ -10,8 +12,10 @@ use MB\Bitrix\Config\ConfigLocator;
 use MB\Bitrix\Contracts\Module\Entity as ModuleEntityContract;
 use MB\Bitrix\Contracts\Config\Entity as ConfigEntityContract;
 use MB\Bitrix\Config\Entity as ConfigEntity;
+use MB\Bitrix\Filesystem\Filesystem;
 use MB\Bitrix\Migration\Facade as MigrationFacade;
-use MB\Bitrix\Support\Facades\Filesystem as Fs;
+use MB\Bitrix\AdminKit\Manager\AdminKitManager;
+use MB\Bitrix\Settings\Page\PageManager;
 use MB\Support\Str;
 use Exception;
 
@@ -164,6 +168,11 @@ class Entity implements ModuleEntityContract
         return app()->container($this->id)->pageManager();
     }
 
+    public function adminKit(): AdminKitManager
+    {
+        return app()->container($this->id)->adminKit();
+    }
+
     /**
      * Возвращает конфигурацию установки модуля
      *
@@ -192,7 +201,7 @@ class Entity implements ModuleEntityContract
      */
     final public function getLang(string $code, ?array $replaces = null, ?string $fallback = null, ?string $lang = LANGUAGE_ID): ?string
     {
-        return message(static::getLangPrefix() . $code, $replaces, $lang) ?: $fallback;
+        return __loc(static::getLangPrefix() . $code, $replaces, $lang) ?: $fallback;
     }
 
     final public function includeLangFile(string $file = 'common')
@@ -229,10 +238,10 @@ class Entity implements ModuleEntityContract
         $moduleHolder = Loader::LOCAL_HOLDER;
         $pathToInclude = "{$documentRoot}/{$moduleHolder}/modules/{$this->id}";
 
-        if (!Fs::isDirectory($pathToInclude)) {
+        if (!Filesystem::instance()->isDirectory($pathToInclude)) {
             $moduleHolder = Loader::BITRIX_HOLDER;
             $pathToInclude = "{$documentRoot}/{$moduleHolder}/modules/{$this->id}";
-            if (!Fs::isDirectory($pathToInclude)) {
+            if (!Filesystem::instance()->isDirectory($pathToInclude)) {
                 $pathToInclude = null;
             }
         }
@@ -251,12 +260,12 @@ class Entity implements ModuleEntityContract
     protected function fillInstallConfig()
     {
         $intallJson = $this->getPath() . '/install/config.json';
-        if ($this->id !== 'mb.core' && !Fs::isFile($intallJson)) {
+        if ($this->id !== 'mb.core' && !Filesystem::instance()->isFile($intallJson)) {
             $intallJson = (new self('mb.core'))->getPath() . '/install/base.config.json';
         }
 
-        if (Fs::isFile($intallJson)) {
-            $this->installConfig = Fs::json($intallJson, true, []);
+        if (Filesystem::instance()->isFile($intallJson)) {
+            $this->installConfig = Filesystem::instance()->json($intallJson, true, []);
         }
     }
 

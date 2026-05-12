@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MB\Bitrix\Component\Parameters;
 
 use Bitrix\Iblock\ORM\Query;
@@ -8,7 +10,7 @@ use Bitrix\Main\Localization\Loc;
 
 trait UseIblock
 {
-    public static function getIblockTypes(string $lang = null, bool $hasEmpty = true): array
+    public static function getIblockTypes(?string $lang = null, bool $hasEmpty = true): array
     {
         Loader::includeModule('iblock');
         $lang = $lang ?? (defined('LANGUAGE_ID') ? LANGUAGE_ID : 'ru');
@@ -34,7 +36,7 @@ trait UseIblock
         return $result;
     }
 
-    public static function getIblocks(?string $iblockType, string $lang = null, bool $hasEmpty = true): array
+    public static function getIblocks(?string $iblockType, ?string $lang = null, bool $hasEmpty = true): array
     {
         Loader::includeModule('iblock');
         $lang = $lang ?? (defined('LANGUAGE_ID') ? LANGUAGE_ID : 'ru');

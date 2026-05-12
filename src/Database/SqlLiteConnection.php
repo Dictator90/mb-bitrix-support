@@ -99,7 +99,7 @@ class SqlLiteConnection extends Connection
         return new SqlLiteSqlHelper($this);
     }
 
-    protected function queryInternal($sql, array $binds = null, SqlTrackerQuery $trackerQuery = null)
+    protected function queryInternal($sql, ?array $binds = null, ?SqlTrackerQuery $trackerQuery = null)
     {
         $this->connectInternal();
 
@@ -125,7 +125,7 @@ class SqlLiteConnection extends Connection
         return $statement;
     }
 
-    protected function createResult($result, SqlTrackerQuery $trackerQuery = null): SqlLiteResult
+    protected function createResult($result, ?SqlTrackerQuery $trackerQuery = null): SqlLiteResult
     {
         return new SqlLiteResult($result, $this, $trackerQuery);
     }

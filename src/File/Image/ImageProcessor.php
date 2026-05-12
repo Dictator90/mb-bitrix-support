@@ -1,4 +1,6 @@
 <?php
+
+declare(strict_types=1);
 namespace MB\Bitrix\File\Image;
 
 use Bitrix\Main;
@@ -23,7 +25,7 @@ class ImageProcessor implements ImageProcessorContract
         private ImageCacheContract|null $cache = null,
         ?FileServiceContract $files = null,
     ) {
-        $this->files = $files ?? FileService::resolve();
+        $this->files = $files ?? $this->resolveFileService();
         // Позволяет подменять реализацию кэша извне,
         // по умолчанию используется кэш в БД.
         $this->cache = $this->cache ?? new DatabaseImageCache($this->files);
@@ -147,7 +149,6 @@ class ImageProcessor implements ImageProcessorContract
     private function generateCacheKey(int $fileId, array $operations, ?string $format, ?int $quality): string
     {
         $filePath = $this->getFilePath($fileId);
-
         $operationsData = array_map(function($operation) {
             if ($operation instanceof SpatieImageOperation) {
                 return [
@@ -273,7 +274,6 @@ class ImageProcessor implements ImageProcessorContract
     private function getFilePath(int $fileId): string
     {
         $file = $this->getFileArray($fileId);
-
         if (!$file) {
             throw new Main\SystemException("File not found: {$fileId}");
         }
@@ -304,5 +304,17 @@ class ImageProcessor implements ImageProcessorContract
         $filename = 'spatie_' . uniqid('', true) . '.tmp';
 
         return rtrim($tempDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $filename;
+    }
+
+    private function resolveFileService(): FileServiceContract
+    {
+        try {
+            /** @var FileServiceContract $service */
+            $service = app('file.service');
+
+            return $service;
+        } catch (\Throwable) {
+            return new FileService();
+        }
     }
 }

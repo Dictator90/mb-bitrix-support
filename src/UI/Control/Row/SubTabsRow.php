@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MB\Bitrix\UI\Control\Row;
 
 use Bitrix\Main\Security\Random;
@@ -10,7 +12,7 @@ use MB\Bitrix\UI\Base\Tab;
 class SubTabsRow extends RowBase
 {
 
-    public function __construct(array $tabs = null)
+    public function __construct(?array $tabs = null)
     {
         $this->setChildren($tabs);
     }

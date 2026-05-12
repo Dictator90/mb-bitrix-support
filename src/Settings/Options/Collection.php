@@ -12,7 +12,7 @@ class Collection
      */
     protected array $items = [];
 
-    public function __construct(array $items = null)
+    public function __construct(?array $items = null)
     {
         if ($items !== null) {
             $this->set($items);
@@ -87,15 +87,13 @@ class Collection
         return null;
     }
 
-    public function offsetSet($offset, $value): static
+    public function offsetSet($offset, $value): void
     {
         if($offset === null) {
             $this->items[] = $value;
         } else {
             $this->items[$offset] = $value;
         }
-
-        return $this;
     }
 
     public function offsetUnset($offset): void
@@ -118,7 +116,7 @@ class Collection
         return empty($this->items);
     }
 
-    public function jsonSerialize()
+    public function jsonSerialize(): mixed
     {
         return Json::encode($this->toArray());
     }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MB\Bitrix\Module;
 
+use MB\Bitrix\AdminKit\Manager\AdminKitManager;
 use MB\Bitrix\Contracts\Module\Entity as ModuleEntityContract;
 use MB\Bitrix\Foundation\Application;
 use MB\Bitrix\Migration\Facade as MigrationFacade;
@@ -27,6 +28,11 @@ final class ModuleContainer
     public function pageManager(): PageManager
     {
         return new PageManager($this->module());
+    }
+
+    public function adminKit(): AdminKitManager
+    {
+        return new AdminKitManager($this->module());
     }
 
     public function migrationFacade(): MigrationFacade

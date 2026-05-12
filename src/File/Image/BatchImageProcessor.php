@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MB\Bitrix\File\Image;
 
 use Bitrix\Main;
@@ -62,10 +64,11 @@ class BatchImageProcessor
      * @param ImageProcessor|null $processor Процессор изображений
      * @param int $chunkSize Размер чанка для обработки
      */
-    public function __construct(array $fileIds = [], ?ImageProcessor $processor = null)
+    public function __construct(array $fileIds = [], ?ImageProcessor $processor = null, int $chunkSize = 10)
     {
         $this->fileIds = array_map('intval', $fileIds);
         $this->processor = $processor ?? new ImageProcessor();
+        $this->chunkSize = max(1, $chunkSize);
     }
 
     /**
@@ -202,8 +205,12 @@ class BatchImageProcessor
      * @param callable $callback Колбэк для генерации операций для каждого файла
      * @return array Результаты обработки
      */
-    public function processDynamic(array $fileIds = [], callable $callback): array
+    public function processDynamic(array $fileIds = [], ?callable $callback = null): array
     {
+        if ($callback === null) {
+            throw new \InvalidArgumentException('Callback is required for processDynamic().');
+        }
+
         // Добавляем переданные файлы, если есть
         if (!empty($fileIds)) {
             $this->addToBatch($fileIds);

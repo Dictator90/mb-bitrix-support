@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MB\Bitrix\File\Image;
 
 use Bitrix\Main;
@@ -22,7 +24,7 @@ class DatabaseImageCache implements ImageCache
      */
     public function __construct(?FileServiceContract $files = null)
     {
-        $this->files = $files ?? FileService::resolve();
+        $this->files = $files ?? $this->resolveFileService();
         $this->initTable();
     }
 
@@ -113,5 +115,17 @@ class DatabaseImageCache implements ImageCache
         $connection = Main\Application::getConnection();
         $helper = $connection->getSqlHelper();
         $connection->query("DELETE FROM {$helper->forSql(CacheTable::getTableName())} WHERE CACHE_KEY = '{$helper->forSql($key)}'");
+    }
+
+    private function resolveFileService(): FileServiceContract
+    {
+        try {
+            /** @var FileServiceContract $service */
+            $service = app('file.service');
+
+            return $service;
+        } catch (\Throwable) {
+            return new FileService();
+        }
     }
 }

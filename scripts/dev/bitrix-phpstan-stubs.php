@@ -145,6 +145,11 @@ namespace Bitrix\Main\Localization {
     class Loc
     {
         public static function loadMessages(string $path): void {}
+
+        public static function getMessage(string $code): ?string
+        {
+            return null;
+        }
     }
 }
 
@@ -182,6 +187,50 @@ namespace {
         function message(string $code, ?array $replace = null, ?string $lang = null): ?string
         {
             return null;
+        }
+    }
+
+    if (! class_exists('CDiskQuota', false)) {
+        class CDiskQuota
+        {
+            /**
+             * @param array<string,mixed> $fileData
+             */
+            public function checkDiskQuota(array $fileData): bool
+            {
+                return true;
+            }
+
+            public static function updateDiskQuota(string $type, int $size, string $action): void
+            {
+            }
+        }
+    }
+
+    if (! class_exists(\CBitrixComponent::class, false)) {
+        class CBitrixComponent
+        {
+            /** @var array<string,mixed> */
+            protected array $arParams = [];
+
+            public function __construct(mixed $component = null)
+            {
+            }
+
+            protected function __showError(string $message, int|string $code = 0): void
+            {
+            }
+        }
+    }
+}
+
+namespace Bitrix\UI\EntitySelector {
+    if (! class_exists(BaseProvider::class, false)) {
+        class BaseProvider
+        {
+            public function __construct(mixed ...$args)
+            {
+            }
         }
     }
 }

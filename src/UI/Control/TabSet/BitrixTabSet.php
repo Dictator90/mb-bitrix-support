@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MB\Bitrix\UI\Control\TabSet;
 
 use Bitrix\Main\Security\Random;
@@ -10,7 +12,7 @@ class BitrixTabSet extends Set
 {
     use HasId;
 
-    public function __construct(array $tabs = null)
+    public function __construct(?array $tabs = null)
     {
         parent::__construct($tabs);
         $this->checkActiveTab();

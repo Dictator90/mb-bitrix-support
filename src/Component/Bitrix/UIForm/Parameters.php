@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MB\Bitrix\Component\Bitrix\UIForm;
 
 use MB\Bitrix\Component\Parameters\Base as ParametersBase;
@@ -9,7 +11,7 @@ class Parameters extends ParametersBase
     public const INITIAL_MODE_VIEW = 'view';
     public const INITIAL_MODE_EDIT = 'edit';
 
-    public function __construct(string|int $id = null)
+    public function __construct(string|int|null $id = null)
     {
         parent::__construct();
         if ($id !== null) {

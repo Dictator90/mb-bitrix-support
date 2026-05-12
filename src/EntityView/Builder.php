@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MB\Bitrix\EntityView;
 
 use Bitrix\Main\Context;
@@ -181,11 +183,6 @@ class Builder
         return $this->getGrid()->getColumns();
     }
 
-    /** @deprecated Use getColumns() */
-    final public function getColums(): ColumnsBase
-    {
-        return $this->getColumns();
-    }
 
     /**
      * Установить доступные поля для Грида
@@ -199,11 +196,6 @@ class Builder
         return $this;
     }
 
-    /** @deprecated Use setGridAvailableColumns() */
-    public function setGridAvailableColums(array $colums): static
-    {
-        return $this->setGridAvailableColumns($colums);
-    }
 
     /**
      * Установить доступные поля для фильтра
@@ -228,11 +220,6 @@ class Builder
         return $this;
     }
 
-    /** @deprecated Use setGridEditableColumns() */
-    public function setGridEditableColums(array $colums): static
-    {
-        return $this->setGridEditableColumns($colums);
-    }
 
     /**
      * Отключение возможности редактирования поля для Грида
@@ -245,11 +232,6 @@ class Builder
         return $this;
     }
 
-    /** @deprecated Use setGridNonEditableColumns() */
-    public function setGridNonEditableColums(array $colums): static
-    {
-        return $this->setGridNonEditableColumns($colums);
-    }
 
     /**
      * Изменить существующие колонки Грида

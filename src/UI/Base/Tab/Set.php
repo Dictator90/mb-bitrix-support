@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MB\Bitrix\UI\Base\Tab;
 
 use MB\Bitrix\Contracts\UI\Renderable;
@@ -20,7 +22,7 @@ abstract class Set
      */
     protected ?array $tabs = null;
 
-    public function __construct(array $tabs = null)
+    public function __construct(?array $tabs = null)
     {
         $this->tabs = $tabs;
     }

@@ -1,12 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MB\Bitrix\Migration;
 
 use Bitrix\Main\Error;
 use MB\Bitrix\Contracts;
 use MB\Bitrix\Contracts\Migration\Entity as MigrationEntityContract;
 use MB\Bitrix\Contracts\Module\Entity as ModuleEntity;
-use MB\Bitrix\Migration\Entities\Agent;
 use MB\Bitrix\Migration\Entities\Event;
 use MB\Bitrix\Migration\Entities\File;
 use MB\Bitrix\Migration\Entities\Storage;
@@ -25,15 +26,6 @@ final class Facade implements Contracts\Migration\Facade
         'file' => File::class,
         'storage' => Storage::class,
         'event' => Event::class,
-    ];
-
-    /**
-     * Optional entities available outside the default pipeline.
-     *
-     * @var array<string, class-string<MigrationEntityContract>>
-     */
-    private const OPTIONAL_PIPELINE = [
-        'agent' => Agent::class,
     ];
 
     /**
@@ -65,24 +57,6 @@ final class Facade implements Contracts\Migration\Facade
     public function downAll(): Result
     {
         return $this->runPipeline(array_reverse($this->defaultPipeline(), true), 'down');
-    }
-
-    /**
-     * @deprecated Don't use -> Need Refactor
-     * @return Result
-     */
-    public function upAgents(): Result
-    {
-        return $this->runNamedEntity('agent', 'up');
-    }
-
-    /**
-     * @deprecated Don't use -> Need Refactor
-     * @return Result
-     */
-    public function downAgents(): Result
-    {
-        return $this->runNamedEntity('agent', 'down');
     }
 
     /**
@@ -148,7 +122,7 @@ final class Facade implements Contracts\Migration\Facade
      */
     private function allEntities(): array
     {
-        return $this->entities ?? (self::DEFAULT_PIPELINE + self::OPTIONAL_PIPELINE);
+        return $this->entities ?? self::DEFAULT_PIPELINE;
     }
 
     private function runNamedEntity(string $name, string $method): Result

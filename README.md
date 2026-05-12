@@ -40,6 +40,16 @@ Single PSR‑4 root is intentional. See `docs/SUPPORTED.md` for subsystem suppor
 - [Storage / Highload](docs/storage-and-highloadblock.md)
 - [UI Components](docs/ui.md) - Forms, fields, tabs, EntitySelector
 - [Laravel-style DI](docs/laravel-parity.md)
+- [Refactoring baseline and KPIs](docs/refactoring-baseline.md)
+
+## Refactoring status
+
+The package now includes:
+
+- full `src` + `tests` PHPStan scanning at level 8 (with generated baseline for incremental burn-down),
+- `Storage\Concerns` batch update/delete logic without regex SQL rewriting,
+- extracted file-subsystem services (`Uploader`, `DuplicateResolver`, `MetadataReader`, `FileRepository`),
+- Bitrix adapter layer for application/cache, quota and localization integration.
 
 ## Matrix (high level)
 
