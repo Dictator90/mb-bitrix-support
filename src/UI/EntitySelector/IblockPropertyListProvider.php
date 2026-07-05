@@ -2,16 +2,12 @@
 
 namespace MB\Bitrix\UI\EntitySelector;
 
-use Bitrix\Iblock\IblockTable;
-use Bitrix\Iblock\Integration\UI\EntitySelector\IblockPropertyElementProvider;
 use Bitrix\Iblock\PropertyTable;
-use Bitrix\Main\Context;
-use Bitrix\Main\Diag\Debug;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
+use Bitrix\UI\EntitySelector\BaseProvider;
 use Bitrix\UI\EntitySelector\Dialog;
 use Bitrix\UI\EntitySelector\Item;
-use Bitrix\UI\EntitySelector\BaseProvider;
 use Bitrix\UI\EntitySelector\SearchQuery;
 
 class IblockPropertyListProvider extends BaseProvider

@@ -2,9 +2,9 @@
 
 namespace MB\Bitrix\Storage;
 
+use Bitrix\Main\ORM\Query\Filter\ConditionTree as Filter;
 use Bitrix\Main\ORM\Query\Query as BitrixQuery;
 use Bitrix\Main\SystemException;
-use Bitrix\Main\ORM\Query\Filter\ConditionTree as Filter;
 
 /**
  * Query builder for entities based on Bitrix D7 ORM.

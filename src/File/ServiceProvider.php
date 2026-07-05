@@ -5,16 +5,16 @@ declare(strict_types=1);
 namespace MB\Bitrix\File;
 
 use MB\Bitrix\Contracts\File\DuplicateResolver as DuplicateResolverContract;
-use MB\Bitrix\Contracts\File\FileServiceContract;
 use MB\Bitrix\Contracts\File\FileRepository as FileRepositoryContract;
+use MB\Bitrix\Contracts\File\FileServiceContract;
 use MB\Bitrix\Contracts\File\MetadataReader as MetadataReaderContract;
 use MB\Bitrix\Contracts\File\Uploader as UploaderContract;
-use MB\Bitrix\Foundation\Application;
-use MB\Bitrix\Foundation\ServiceProvider as BaseServiceProvider;
 use MB\Bitrix\File\Services\DuplicateResolver;
 use MB\Bitrix\File\Services\FileRepository;
 use MB\Bitrix\File\Services\MetadataReader;
 use MB\Bitrix\File\Services\Uploader;
+use MB\Bitrix\Foundation\Application;
+use MB\Bitrix\Foundation\ServiceProvider as BaseServiceProvider;
 
 final class ServiceProvider extends BaseServiceProvider
 {

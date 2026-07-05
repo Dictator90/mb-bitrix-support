@@ -8,16 +8,15 @@ use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager as BitrixModuleManager;
+use Exception;
+use MB\Bitrix\AdminKit\Manager\AdminKitManager;
 use MB\Bitrix\Config\ConfigLocator;
-use MB\Bitrix\Contracts\Module\Entity as ModuleEntityContract;
-use MB\Bitrix\Contracts\Config\Entity as ConfigEntityContract;
 use MB\Bitrix\Config\Entity as ConfigEntity;
+use MB\Bitrix\Contracts\Config\Entity as ConfigEntityContract;
+use MB\Bitrix\Contracts\Module\Entity as ModuleEntityContract;
 use MB\Bitrix\Filesystem\Filesystem;
 use MB\Bitrix\Migration\Facade as MigrationFacade;
-use MB\Bitrix\AdminKit\Manager\AdminKitManager;
-use MB\Bitrix\Settings\Page\PageManager;
 use MB\Support\Str;
-use Exception;
 
 /**
  * Менеджер для работы с модулями Битрикс
@@ -161,11 +160,6 @@ class Entity implements ModuleEntityContract
     public function getMigrationFacade(): MigrationFacade
     {
         return $this->migrationFacade ??= app()->container($this->id)->migrationFacade();
-    }
-
-    public function getPageManager(): PageManager
-    {
-        return app()->container($this->id)->pageManager();
     }
 
     public function adminKit(): AdminKitManager

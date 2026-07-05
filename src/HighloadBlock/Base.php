@@ -13,7 +13,6 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Entity;
-use Bitrix\Main\ORM\Objectify;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\UserFieldTable;

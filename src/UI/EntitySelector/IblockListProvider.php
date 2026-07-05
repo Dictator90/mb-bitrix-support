@@ -6,9 +6,9 @@ use Bitrix\Iblock\IblockTable;
 use Bitrix\Main\Context;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
+use Bitrix\UI\EntitySelector\BaseProvider;
 use Bitrix\UI\EntitySelector\Dialog;
 use Bitrix\UI\EntitySelector\Item;
-use Bitrix\UI\EntitySelector\BaseProvider;
 use Bitrix\UI\EntitySelector\SearchQuery;
 
 class IblockListProvider extends BaseProvider

@@ -7,7 +7,6 @@ namespace MB\Bitrix\Support;
 use MB\Bitrix\Contracts\Log\LoggerFactoryInterface;
 use MB\Bitrix\Foundation\ServiceProvider;
 use MB\Bitrix\Logger\LoggerFactory;
-use MB\Bitrix\Logger\UniversalLogger;
 
 /**
  * Registers logger factory and default logger in the container.

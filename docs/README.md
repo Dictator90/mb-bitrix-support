@@ -10,8 +10,9 @@ Main package namespace: `MB\Bitrix\`.
 - `Storage` / `Database` - ORM-oriented helpers and SQL tooling.
 - `File` / `Filesystem` - file workflows and adapters.
 - `Migration` - migration facade and infrastructure.
-- `Module` / `Config` / `Settings` - module-aware configuration and options.
-- `UI` / `EntityView` / `Page` - admin UI abstractions.
+- `Module` / `Config` - module-aware configuration and options.
+- `UI` - EntitySelector providers for entity dialogs and admin utilities.
+- **Note:** Admin UI building (forms, fields, settings pages, grids) is now in separate package `mb4it/bitrix-admin-kit`. Settings, EntityView, UI Form/Control classes moved there in v1.
 
 ## Current Refactoring Direction
 

@@ -36,17 +36,23 @@ class ImageProcessor implements ImageProcessorContract
      */
     public function process(int $fileId, array $operations, ?string $format = null, int $quality = 95): int
     {
-        $cachedResult = $this->getCached($fileId, $operations, $format, $quality);
-        if ($cachedResult !== null) {
-            return $cachedResult;
+        try {
+            $cachedResult = $this->getCached($fileId, $operations, $format, $quality);
+            if ($cachedResult !== null) {
+                return $cachedResult;
+            }
+
+            $resultId = $this->executeProcessing($fileId, $operations, $format, $quality);
+
+            $cacheKey = $this->generateCacheKey($fileId, $operations, $format, $quality);
+            $this->cache->set($cacheKey, $resultId, $fileId);
+
+            return $resultId;
+        } catch (\Throwable $e) {
+            $this->logProcessingFailure($fileId, $e);
+
+            return $fileId;
         }
-
-        $resultId = $this->executeProcessing($fileId, $operations, $format, $quality);
-
-        $cacheKey = $this->generateCacheKey($fileId, $operations, $format, $quality);
-        $this->cache->set($cacheKey, $resultId, $fileId);
-
-        return $resultId;
     }
 
     /**
@@ -54,8 +60,12 @@ class ImageProcessor implements ImageProcessorContract
      */
     public function getCached(int $fileId, array $operations, ?string $format = null, ?int $quality = null): ?int
     {
-        $cacheKey = $this->generateCacheKey($fileId, $operations, $format, $quality);
-        return $this->cache->get($cacheKey);
+        try {
+            $cacheKey = $this->generateCacheKey($fileId, $operations, $format, $quality);
+            return $this->cache->get($cacheKey);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     public function setCacheEngine(ImageCacheContract $cache): self
@@ -304,6 +314,22 @@ class ImageProcessor implements ImageProcessorContract
         $filename = 'spatie_' . uniqid('', true) . '.tmp';
 
         return rtrim($tempDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $filename;
+    }
+
+    /**
+     * Best-effort запись причины сбоя обработки изображения.
+     * Никогда не бросает исключений сама, чтобы не мешать деградации до оригинала.
+     */
+    private function logProcessingFailure(int $fileId, \Throwable $e): void
+    {
+        try {
+            error_log(sprintf(
+                '[mb.core ImageProcessor] fileId=%d failed: %s',
+                $fileId,
+                $e->getMessage()
+            ));
+        } catch (\Throwable) {
+        }
     }
 
     private function resolveFileService(): FileServiceContract

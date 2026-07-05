@@ -2,8 +2,8 @@
 
 namespace MB\Bitrix\Storage\Concerns;
 
-use Bitrix\Main\Entity\UpdateResult;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\Entity\UpdateResult;
 use MB\Bitrix\Storage\SqlHelper;
 
 trait MassUpdateTrait

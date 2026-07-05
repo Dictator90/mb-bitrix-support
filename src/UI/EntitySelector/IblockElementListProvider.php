@@ -2,13 +2,14 @@
 
 namespace MB\Bitrix\UI\EntitySelector;
 
-use Bitrix\Iblock\Component\Tools;
 use Bitrix\Iblock\PropertyTable;
+use Bitrix\Main\Diag\Debug;
 use Bitrix\Main\Loader;
+use Bitrix\UI\EntitySelector\BaseProvider;
 use Bitrix\UI\EntitySelector\Dialog;
 use Bitrix\UI\EntitySelector\Item;
-use Bitrix\UI\EntitySelector\BaseProvider;
 use Bitrix\UI\EntitySelector\SearchQuery;
+use MB\Filesystem\Filesystem;
 
 class IblockElementListProvider extends BaseProvider
 {
@@ -119,6 +120,7 @@ class IblockElementListProvider extends BaseProvider
             'NAME',
             'PREVIEW_TEXT',
             'PREVIEW_PICTURE',
+            'DETAIL_PICTURE',
             'IBLOCK_ID',
             'XML_ID',
         ];
@@ -132,10 +134,12 @@ class IblockElementListProvider extends BaseProvider
                 $selectFields
             );
             while ($element = $elementData->fetch()) {
-                if (empty($element['PREVIEW_PICTURE'])) {
-                    $element['PREVIEW_PICTURE'] = $this->getElementImage($element);
+                if (!empty($element['PREVIEW_PICTURE'])) {
+                    $element['PREVIEW_PICTURE'] = $this->getImageSource((int)$element['PREVIEW_PICTURE']);
+                } elseif (!empty($element['DETAIL_PICTURE'])) {
+                    $element['PREVIEW_PICTURE'] = $this->getImageSource((int)$element['DETAIL_PICTURE']);
                 } else {
-                    $element['PREVIEW_PICTURE'] = $this->getImageSource($element['PREVIEW_PICTURE']);
+                    $element['PREVIEW_PICTURE'] = $this->getElementImage($element);
                 }
                 $elements[] = $element;
             }
@@ -152,7 +156,7 @@ class IblockElementListProvider extends BaseProvider
             'title' => $element['NAME'] ?? null,
             'subtitle' => $element['ID'] ?? null,
             'description' => $element['PREVIEW_TEXT'] ?? null,
-            'avatar' => $element['PREVIEW_PICTURE'] ?? null,
+            'avatar' => (new Filesystem($_SERVER['DOCUMENT_ROOT']))->exists($element['PREVIEW_PICTURE']) ?? null,
             'selected' => in_array($element['ID'], $this->options['selected']),
             'customData' => [
                 'xmlId' => $element['XML_ID'] ?? null,
@@ -228,11 +232,7 @@ class IblockElementListProvider extends BaseProvider
             return null;
         }
 
-        $file = \CFile::GetFileArray($id);
-        if (!$file) {
-            return null;
-        }
-
-        return Tools::getImageSrc($file, false) ?: null;
+        $path = \CFile::GetPath($id);
+        return is_string($path) && $path !== '' ? $path : null;
     }
 }

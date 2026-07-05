@@ -1,11 +1,8 @@
 <?php
 namespace MB\Bitrix\Page;
 
-use Bitrix\Main\Application;
 use Bitrix\Main\Context;
-use Bitrix\Main\Page;
 use Bitrix\Main\Request;
-use Bitrix\Main\SiteTable;
 use MB\Bitrix\Traits\SingletonTrait;
 
 class Common

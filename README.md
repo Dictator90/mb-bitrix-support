@@ -1,6 +1,6 @@
 # mb4it/bitrix-support
 
-Composer library for **1C-Bitrix** projects: ORM storage helpers (MySQL / PostgreSQL batch SQL), Highload blocks, migration utilities, EntityView, files/images, logging.
+Composer library for **1C-Bitrix** projects: ORM storage helpers (MySQL / PostgreSQL batch SQL), Highload blocks, migration utilities, files/images, logging.
 
 ## Requirements
 
@@ -38,7 +38,7 @@ Single PSR‑4 root is intentional. See `docs/SUPPORTED.md` for subsystem suppor
 - [Application bootstrap](docs/application.md)
 - [Migrations](docs/migrations.md)
 - [Storage / Highload](docs/storage-and-highloadblock.md)
-- [UI Components](docs/ui.md) - Forms, fields, tabs, EntitySelector
+- [UI Components](docs/ui.md) - EntitySelector providers and Admin utilities (form/field building moved to `mb4it/bitrix-admin-kit`)
 - [Laravel-style DI](docs/laravel-parity.md)
 - [Refactoring baseline and KPIs](docs/refactoring-baseline.md)
 

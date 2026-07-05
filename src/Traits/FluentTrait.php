@@ -3,7 +3,6 @@
 namespace MB\Bitrix\Traits;
 
 use BadMethodCallException;
-use Bitrix\Main\Text\StringHelper;
 use InvalidArgumentException;
 use MB\Support\Conditionable\Condition;
 use MB\Support\Str;

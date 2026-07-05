@@ -3,12 +3,12 @@
 namespace MB\Bitrix\Storage;
 
 use Bitrix\Main\ORM\Fields\ExpressionField;
+use Bitrix\Main\ORM\Fields\Relations;
 use Bitrix\Main\ORM\Objectify\Collection;
 use Bitrix\Main\ORM\Objectify\IdentityMap;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
+use Bitrix\Main\ORM\Query\Query as BitrixQuery;
 use Bitrix\Main\ORM\Query\QueryHelper as BitrixQueryHelper;
-use \Bitrix\Main\ORM\Query\Query as BitrixQuery;
-use Bitrix\Main\ORM\Fields\Relations;
 use Bitrix\Main\Security\Random;
 
 class QueryHelper extends BitrixQueryHelper

@@ -1,5 +1,7 @@
 # AdminKit — документация
 
+> **📦 Пакет:** Это документация для отдельного пакета [`mb4it/bitrix-admin-kit`](https://github.com/mb4it/bitrix-admin-kit). AdminKit содержит классы для построения административных страниц и был выделен из `mb4it/bitrix-support` в v1.
+
 Конструктор административных страниц для Bitrix D7-модулей.
 Вдохновлён [MoonShine](https://moonshine-laravel.com/), полностью построен на Bitrix-классах.
 

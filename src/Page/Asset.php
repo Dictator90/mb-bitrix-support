@@ -1,7 +1,6 @@
 <?php
 namespace MB\Bitrix\Page;
 
-use Bitrix\Main\Application;
 use Bitrix\Main\Page;
 use MB\Bitrix\Traits\SingletonTrait;
 
@@ -216,9 +215,34 @@ class Asset
 
         if (!$extenalLink) {
             $path = Includer::checkPath($path);
+            $path = $this->appendVersion($path);
         }
 
         return $path;
 
+    }
+
+    /**
+     * Добавляет к локальному ассету версию по времени изменения файла (cache-busting),
+     * чтобы браузер подтягивал обновлённые build.js/page-*.js/css без ручного сброса кэша.
+     */
+    protected function appendVersion(string $path): string
+    {
+        $cleanPath = strtok($path, '?');
+        if ($cleanPath === false || $cleanPath === '') {
+            return $path;
+        }
+
+        $fsPath = $_SERVER['DOCUMENT_ROOT'] . $cleanPath;
+        if (!is_file($fsPath)) {
+            return $path;
+        }
+
+        $version = @filemtime($fsPath);
+        if (!$version) {
+            return $path;
+        }
+
+        return $path . (str_contains($path, '?') ? '&' : '?') . 'v=' . $version;
     }
 }

@@ -2,14 +2,13 @@
 
 namespace MB\Bitrix\UI\EntitySelector;
 
-use Bitrix\UI\EntitySelector\Item;
+use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Main\GroupTable;
 use Bitrix\UI\EntitySelector\BaseProvider;
 use Bitrix\UI\EntitySelector\Dialog;
+use Bitrix\UI\EntitySelector\Item;
 use Bitrix\UI\EntitySelector\SearchQuery;
 use Bitrix\UI\EntitySelector\Tab;
-use Bitrix\Main\GroupTable;
-use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\Engine\CurrentUser;
 
 class UserGroupListProvider extends BaseProvider
 {

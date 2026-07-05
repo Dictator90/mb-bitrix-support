@@ -6,22 +6,21 @@ namespace MB\Bitrix\Foundation;
 use Bitrix\Main\Application as BitrixApplication;
 use MB\Bitrix\Config\ArrayRepository as ConfigArrayRepository;
 use MB\Bitrix\Contracts\Config\Repository as ConfigRepositoryContract;
+use MB\Bitrix\File\ServiceProvider as FileServiceProvider;
+use MB\Bitrix\Filesystem\ServiceProvider as FilesystemServiceProvider;
 use MB\Bitrix\Foundation\Orchestrator\BootOrchestrator;
 use MB\Bitrix\Foundation\Orchestrator\DeferredProviderOrchestrator;
 use MB\Bitrix\Foundation\Orchestrator\ProviderResolutionOrchestrator;
-use MB\Bitrix\ServiceProvider as BitrixServiceProvider;
-use MB\Bitrix\File\ServiceProvider as FileServiceProvider;
-use MB\Bitrix\Filesystem\ServiceProvider as FilesystemServiceProvider;
+use MB\Bitrix\Logger\ModuleLoggerFactory;
+use MB\Bitrix\Logger\ServiceProvider as LoggerServiceProvider;
 use MB\Bitrix\Migration\Facade as MigrationFacade;
 use MB\Bitrix\Migration\ServiceProvider as MigrationServiceProvider;
-use MB\Bitrix\Logger\ServiceProvider as LoggerServiceProvider;
-use MB\Bitrix\Logger\ModuleLoggerFactory;
 use MB\Bitrix\Module\Entity as ModuleEntity;
 use MB\Bitrix\Module\ModuleContainer;
 use MB\Bitrix\Module\ServiceProvider as ModuleServiceProvider;
 use MB\Bitrix\Page\Asset;
-use MB\Bitrix\AdminKit\Providers\AdminKitServiceProvider;
 use MB\Bitrix\Page\ServiceProvider as AssetServiceProvider;
+use MB\Bitrix\ServiceProvider as BitrixServiceProvider;
 use MB\Bitrix\Traits\BitrixEventsObservableTrait;
 use MB\Container\AliasRegistry;
 use MB\Container\BindingRegistry;
@@ -29,7 +28,6 @@ use MB\Container\Container;
 use MB\Container\Exceptions\ContainerException;
 use MB\Container\Exceptions\NotFoundException;
 use Psr\Container\ContainerInterface;
-use Psr\Log\LoggerInterface;
 use ReflectionClass;
 use ReflectionFunction;
 use ReflectionMethod;
@@ -176,7 +174,6 @@ class Application extends Container
         $this->register(BitrixServiceProvider::class);
         $this->register(LoggerServiceProvider::class);
         $this->register(ModuleServiceProvider::class);
-        $this->register(AdminKitServiceProvider::class);
     }
 
     protected function registerEvents(): void
@@ -255,6 +252,22 @@ class Application extends Container
         return $this;
     }
 
+    /**
+     * Load additional PHP config files from an arbitrary directory into the config repository.
+     */
+    public function loadConfigFrom(string $directory): static
+    {
+        try {
+            $config = $this->make('config');
+            if ($config instanceof ConfigArrayRepository) {
+                $config->loadFromDirectory($directory);
+            }
+        } catch (NotFoundException) {
+        }
+
+        return $this;
+    }
+
     public function registerModule($moduleId): void
     {
         $this->singleton("$moduleId:module", static fn () => new ModuleEntity($moduleId));
@@ -264,7 +277,6 @@ class Application extends Container
             "$moduleId:logger",
             fn (Application $app) => $app->make(ModuleLoggerFactory::class)->make($moduleId)
         );
-        //$this->singleton("$moduleId:admin.page", fn (Application $app) => new PageManager($app->make("$moduleId:module")));
     }
 
     /**

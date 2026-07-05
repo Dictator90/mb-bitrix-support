@@ -4,7 +4,6 @@ namespace MB\Bitrix\Config;
 
 use Bitrix\Main\HttpApplication;
 use MB\Bitrix\Contracts\Module\Entity as ModuleEntityContract;
-use MB\Bitrix\Contracts\Config\Entity as EntityContract;
 use MB\Support\Collection;
 
 class Entity implements \MB\Bitrix\Contracts\Config\Entity

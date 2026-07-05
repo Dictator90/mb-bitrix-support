@@ -8,13 +8,13 @@ This matrix tracks what the maintainers treat as **supported for consumers** ver
 | HighloadBlock | `MB\Bitrix\HighloadBlock\*` | Yes | Requires `highloadblock` module at runtime. |
 | Migration managers | `MB\Bitrix\Migration\*`, `MB\Bitrix\Agent\*`, `MB\Bitrix\Event\*` | Yes | `Migration\Facade::upAll()` / `downAll()` do **not** run agent sync (see `docs/migrations.md`). |
 | Foundation / facades | `MB\Bitrix\Foundation\Application`, `MB\Bitrix\Support\Facades\*` | Yes | Requires explicit bootstrap; global `app()`, `config()`, `module()` via `src/Support/helpers.php` after the kernel sets the instance. |
-| Bitrix adapters | `MB\Bitrix\Contracts\Bitrix\*`, `MB\Bitrix\Bitrix\Adapters\*` | Yes | Adapter layer for application/cache, localization and disk quota integration. |
-| Module entity | `MB\Bitrix\Module\Entity` | Yes | Uses `MB\Bitrix\Config\ConfigLocator` and `MB\Bitrix\Settings\*`; `fillConfig` depends on working locator + `MB\Bitrix\Config\Entity` discovery. |
+| Bitrix adapters | `MB\Bitrix\Contracts\Bitrix\*`, `MB\Bitrix\Bitrix\Adapters\*` | Yes | Adapter layer for application/cache, localization and disk quota integration. Contracts now in `mb4it/bitrix-contracts` (drop-in replacement, same namespace). |
+| Module entity | `MB\Bitrix\Module\Entity` | Yes | Uses `MB\Bitrix\Config\ConfigLocator` and `MB\Bitrix\Config\Entity` discovery. |
 | Config entity / options | `MB\Bitrix\Config\Entity`, `ConfigManager`, `UseOptions` | Yes | **`Entity::create($moduleId, $siteId)`** is the supported factory (requires `module()` + `registerModule`). |
 | Config locator | `MB\Bitrix\Config\ConfigLocator` | Yes | Discovers subclasses of **`MB\Bitrix\Config\Entity`** under module `lib/`. |
-| Admin / settings UI | `MB\Bitrix\Settings\*` | Experimental | Depends on Bitrix UI and D7; some paths were aligned to `MB\Bitrix\UI\*`. Treat as integration-heavy until covered by smoke tests. |
-| EntityView | `MB\Bitrix\EntityView\*` | Mixed | `MenuAction` defaults are safe but minimal; override in host module for real UX. |
-| UI Components | `MB\Bitrix\UI\*` | Yes | Base classes (View, Form, Grid, Tab, Row), control fields, EntitySelector providers, traits. |
+| Admin / settings UI | `MB\Bitrix\Settings\*` | **Removed** | Migrated to `mb4it/bitrix-admin-kit` package. Use `AdminKit\Resource` for building admin pages. |
+| EntityView | `MB\Bitrix\EntityView\*` | **Removed** | Migrated to `mb4it/bitrix-admin-kit` package. |
+| UI Components | `MB\Bitrix\UI\*` | Partial | Only `UI\EntitySelector\*` providers and `UI\Admin\MenuIcon` remain (needed by admin-kit). Form building, fields, controls, tabs migrated to `mb4it/bitrix-admin-kit`. See `docs/ui.md` for EntitySelector usage. |
 | File services | `MB\Bitrix\File\*`, `MB\Bitrix\File\Services\*`, `MB\Bitrix\Contracts\File\*` | Yes | `FileService` remains the external entrypoint; internals are decomposed into `Uploader`, `DuplicateResolver`, `MetadataReader`, and `FileRepository`. |
 | Namespace policy | `MB\Bitrix\*` under `src/` | Documented | Public package namespace is `MB\Bitrix\`. |
 | Without global `app()` | n/a | TBD | Supported path today: resolve `Application::getInstance()` and use `container($moduleId)` or inject services directly. |

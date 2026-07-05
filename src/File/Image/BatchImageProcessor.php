@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace MB\Bitrix\File\Image;
 
-use Bitrix\Main;
-use Bitrix\Main\Diag\Debug;
 use MB\Bitrix\File\Image\Operations\SpatieImageOperation;
 use Spatie\ImageOptimizer\OptimizerChain;
 

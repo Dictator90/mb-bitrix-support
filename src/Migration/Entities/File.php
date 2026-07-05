@@ -8,8 +8,8 @@ use Bitrix\Main;
 use Bitrix\Main\Application;
 use Bitrix\Main\IO\Directory;
 use MB\Bitrix\Filesystem\Filesystem;
-use MB\Bitrix\Migration\Result;
 use MB\Bitrix\Migration\BaseEntity;
+use MB\Bitrix\Migration\Result;
 
 class File extends BaseEntity
 {

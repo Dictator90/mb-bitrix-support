@@ -1,27 +1,49 @@
 {
   "name": "mb4it/bitrix-support",
-  "description": "Helper library for 1C-Bitrix: ORM storage, migrations, EntityView, files, logging.",
+  "description": "Helper library for 1C-Bitrix: DI/Foundation, ORM storage, migrations, files, logging.",
   "type": "library",
   "minimum-stability": "dev",
   "prefer-stable": true,
   "license": "MIT",
   "require": {
     "php": "^8.2",
+    "mb4it/bitrix-contracts": "@dev",
     "mb4it/container": "@dev",
     "mb4it/stringable": "@dev",
     "mb4it/collections": "@dev",
     "mb4it/conditionable": "@dev",
-    "mb4it/filesystem": "^1.0",
+    "mb4it/filesystem": "@dev",
     "mb4it/logger": "@dev",
     "spatie/image": "^3.8",
     "ext-fileinfo": "*",
     "psr/log": "^1.0|^2.0|^3.0"
   },
   "require-dev": {
-    "avshatalov48/bitrix-core-business": "@dev",
+    "mb4it/bitrix-core-test": "@dev",
     "ext-pdo_sqlite": "*",
     "phpunit/phpunit": "^11.0",
     "phpstan/phpstan": "^2.0"
+  },
+  "repositories": [
+    {
+      "type": "path",
+      "url": "F:\\Projects\\mb\\composer\\mb-bitrix-contracts"
+    },
+    {
+      "type": "path",
+      "url": "F:\\Projects\\mb\\composer\\mb-filesystem"
+    },
+    {
+      "type": "path",
+      "url": "F:\\Projects\\mb\\composer\\mb-bitrix-core-test"
+    }
+  ],
+  "extra": {
+    "bitrix-core-test": {
+      "source": "local",
+      "local_path": "F:/Projects/mb/engineering-experts.ru/bitrix",
+      "version_policy": "warn"
+    }
   },
   "authors": [
     {
@@ -42,7 +64,7 @@
       "MB\\Bitrix\\Tests\\": "tests/"
     },
     "classmap": [
-      "vendor/avshatalov48/bitrix-core-business/modules/main/lib"
+      "vendor/mb4it/bitrix-core-test/bitrix/modules/main/lib"
     ]
   },
   "scripts": {

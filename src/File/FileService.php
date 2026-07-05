@@ -12,7 +12,6 @@ use Bitrix\Main\File\Image;
 use Bitrix\Main\File\Internal\FileDuplicateTable;
 use Bitrix\Main\File\Internal\FileHashTable;
 use Bitrix\Main\FileTable;
-use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Security;
 use Bitrix\Main\Type\DateTime as BitrixDateTime;
 use Bitrix\Main\Web;
@@ -27,12 +26,11 @@ use MB\Bitrix\Contracts\File\FileRepository as FileRepositoryContract;
 use MB\Bitrix\Contracts\File\FileServiceContract;
 use MB\Bitrix\Contracts\File\MetadataReader as MetadataReaderContract;
 use MB\Bitrix\Contracts\File\Uploader as UploaderContract;
-use MB\Bitrix\Foundation\Application;
-use MB\Bitrix\Filesystem\Filesystem;
 use MB\Bitrix\File\Services\DuplicateResolver;
 use MB\Bitrix\File\Services\FileRepository;
 use MB\Bitrix\File\Services\MetadataReader;
 use MB\Bitrix\File\Services\Uploader;
+use MB\Bitrix\Filesystem\Filesystem;
 
 class FileService implements FileServiceContract
 {

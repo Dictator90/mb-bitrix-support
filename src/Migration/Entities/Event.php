@@ -3,8 +3,8 @@
 namespace MB\Bitrix\Migration\Entities;
 
 use MB\Bitrix\Event\EventManager;
-use MB\Bitrix\Migration\Result;
 use MB\Bitrix\Migration\BaseEntity;
+use MB\Bitrix\Migration\Result;
 
 class Event extends BaseEntity
 {

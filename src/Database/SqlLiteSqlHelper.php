@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace MB\Bitrix\Database;
 
 use Bitrix\Main;
+use Bitrix\Main\DB\SqlHelper;
 use Bitrix\Main\ORM;
 use Bitrix\Main\ORM\Fields\ScalarField;
 use Bitrix\Main\Type;
-use Bitrix\Main\DB\SqlHelper;
 
 /**
  * SQL-хелпер для {@see SqlLiteConnection} (по мотивам {@see \Bitrix\Main\DB\PgsqlSqlHelper} / {@see \Bitrix\Main\DB\MysqliSqlHelper}).
