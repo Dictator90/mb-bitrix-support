@@ -460,7 +460,7 @@ class FileService implements FileServiceContract
             'WIDTH' => $imageInfo['width'] ?? 0,
             'HEIGHT' => $imageInfo['height'] ?? 0,
             'FILE_HASH' => $this->metadataReader->hash($fileData),
-            'EXTERNAL_ID' => $fileData['external_id'] ?? md5(mt_rand()),
+            'EXTERNAL_ID' => $fileData['external_id'] ?? md5((string) mt_rand()),
             'HANDLER_ID' => $fileData['HANDLER_ID'] ?? '',
             'physical_path' => $filePath['full_path'],
             'tmp_name' => $fileData['tmp_name'] ?? null,

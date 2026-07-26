@@ -34,7 +34,7 @@ class DetailUrl
         return str_replace(
             array_keys($replace),
             array_values($replace),
-            $template ?: $data['DETAIL_PAGE_URL_SCHEMA']
+            $template ?: self::getUrlDataValue($data, 'DETAIL_PAGE_URL_SCHEMA')
         );
     }
 
@@ -60,27 +60,27 @@ class DetailUrl
         return str_replace(
             array_keys($replace),
             array_values($replace),
-            $template ?: $data['DETAIL_PAGE_URL_SCHEMA']
+            $template ?: self::getUrlDataValue($data, 'DETAIL_PAGE_URL_SCHEMA')
         );
     }
 
     public static function addElementUrlDataToQuery(Query $query): void
     {
-        $query->setSelect([
-            'ID',
-            'CODE',
-            'XML_ID',
-            'IBLOCK_ID',
-            'IBLOCK_TYPE_ID' => 'IBLOCK.IBLOCK_TYPE_ID',
-            'IBLOCK_SECTION_ID',
-            'SECTION_CODE_PATH',
-            'DETAIL_PAGE_URL_SCHEMA' => 'IBLOCK.DETAIL_PAGE_URL',
-            'SECTION_ID' => 'IBLOCK_SECTION.ID',
-            'SECTION_CODE' => 'IBLOCK_SECTION.CODE'
-        ]);
+        $query->registerRuntimeField(
+            new ExpressionField('DETAIL_URL_IBLOCK_TYPE_ID', '%s', ['IBLOCK.IBLOCK_TYPE_ID'])
+        );
+        $query->registerRuntimeField(
+            new ExpressionField('DETAIL_URL_DETAIL_PAGE_URL_SCHEMA', '%s', ['IBLOCK.DETAIL_PAGE_URL'])
+        );
+        $query->registerRuntimeField(
+            new ExpressionField('DETAIL_URL_SECTION_ID', '%s', ['IBLOCK_SECTION.ID'])
+        );
+        $query->registerRuntimeField(
+            new ExpressionField('DETAIL_URL_SECTION_CODE', '%s', ['IBLOCK_SECTION.CODE'])
+        );
         $query->registerRuntimeField(
             new ExpressionField(
-                'SECTION_CODE_PATH',
+                'DETAIL_URL_SECTION_CODE_PATH',
                 '(
                     SELECT GROUP_CONCAT(s.CODE ORDER BY s.DEPTH_LEVEL SEPARATOR "/")
                       FROM b_iblock_section s
@@ -91,26 +91,36 @@ class DetailUrl
                 ['IBLOCK_ID', 'IBLOCK_SECTION.LEFT_MARGIN', 'IBLOCK_SECTION.RIGHT_MARGIN']
             )
         );
+        $query
+            ->addSelect('ID')
+            ->addSelect('CODE')
+            ->addSelect('XML_ID')
+            ->addSelect('IBLOCK_ID')
+            ->addSelect('DETAIL_URL_IBLOCK_TYPE_ID')
+            ->addSelect('IBLOCK_SECTION_ID')
+            ->addSelect('DETAIL_URL_SECTION_CODE_PATH')
+            ->addSelect('DETAIL_URL_DETAIL_PAGE_URL_SCHEMA')
+            ->addSelect('DETAIL_URL_SECTION_ID')
+            ->addSelect('DETAIL_URL_SECTION_CODE');
     }
 
     public static function addSectionUrlDataToQuery(Query $query): void
     {
-        $query->setSelect([
-            'ID',
-            'CODE',
-            'XML_ID',
-            'IBLOCK_ID',
-            'IBLOCK_TYPE_ID' => 'IBLOCK.IBLOCK_TYPE_ID',
-            'IBLOCK_SECTION_ID',
-            'SECTION_CODE_PATH',
-            'DETAIL_PAGE_URL_SCHEMA' => 'IBLOCK.SECTION_PAGE_URL',
-            'SECTION_ID' => 'PARENT_SECTION.ID',
-            'SECTION_CODE' => 'PARENT_SECTION.CODE'
-        ]);
-
+        $query->registerRuntimeField(
+            new ExpressionField('DETAIL_URL_IBLOCK_TYPE_ID', '%s', ['IBLOCK.IBLOCK_TYPE_ID'])
+        );
+        $query->registerRuntimeField(
+            new ExpressionField('DETAIL_URL_DETAIL_PAGE_URL_SCHEMA', '%s', ['IBLOCK.SECTION_PAGE_URL'])
+        );
+        $query->registerRuntimeField(
+            new ExpressionField('DETAIL_URL_SECTION_ID', '%s', ['PARENT_SECTION.ID'])
+        );
+        $query->registerRuntimeField(
+            new ExpressionField('DETAIL_URL_SECTION_CODE', '%s', ['PARENT_SECTION.CODE'])
+        );
         $query->registerRuntimeField(
             new ExpressionField(
-                'SECTION_CODE_PATH',
+                'DETAIL_URL_SECTION_CODE_PATH',
                 '(
                     SELECT GROUP_CONCAT(s.CODE ORDER BY s.DEPTH_LEVEL SEPARATOR "/")
                       FROM b_iblock_section s
@@ -121,6 +131,17 @@ class DetailUrl
                 ['IBLOCK_ID', 'PARENT_SECTION.LEFT_MARGIN', 'PARENT_SECTION.RIGHT_MARGIN']
             )
         );
+        $query
+            ->addSelect('ID')
+            ->addSelect('CODE')
+            ->addSelect('XML_ID')
+            ->addSelect('IBLOCK_ID')
+            ->addSelect('DETAIL_URL_IBLOCK_TYPE_ID')
+            ->addSelect('IBLOCK_SECTION_ID')
+            ->addSelect('DETAIL_URL_SECTION_CODE_PATH')
+            ->addSelect('DETAIL_URL_DETAIL_PAGE_URL_SCHEMA')
+            ->addSelect('DETAIL_URL_SECTION_ID')
+            ->addSelect('DETAIL_URL_SECTION_CODE');
     }
 
     public static function buildByElement(array $row, ?string $template = null, ?string $siteId = null): string
@@ -130,7 +151,7 @@ class DetailUrl
         return str_replace(
             array_keys($replace),
             array_values($replace),
-            $template ?: $row['DETAIL_PAGE_URL_SCHEMA']
+            $template ?: self::getUrlDataValue($row, 'DETAIL_PAGE_URL_SCHEMA')
         );
     }
 
@@ -141,7 +162,7 @@ class DetailUrl
         return str_replace(
             array_keys($replace),
             array_values($replace),
-            $template ?: $row['DETAIL_PAGE_URL_SCHEMA']
+            $template ?: self::getUrlDataValue($row, 'DETAIL_PAGE_URL_SCHEMA')
         );
     }
 
@@ -177,12 +198,12 @@ class DetailUrl
             '#CODE#' => $data['CODE'] ?? '',
             '#ID#' => $data['ID'] ?? '',
             '#IBLOCK_ID#' => $data['IBLOCK_ID'] ?? '',
-            '#IBLOCK_TYPE_ID#' => $data['IBLOCK_TYPE_ID'] ?? '',
+            '#IBLOCK_TYPE_ID#' => self::getUrlDataValue($data, 'IBLOCK_TYPE_ID'),
             '#ELEMENT_ID#' => $data['ID'] ?? '',
             '#EXTERNAL_ID#' => $data['XML_ID'] ?? '',
             '#SECTION_ID#' => $data['SECTION_ID'] ?? '',
-            '#SECTION_CODE#' => $data['SECTION_ID'] ?? '',
-            '#SECTION_CODE_PATH#' => $data['SECTION_CODE_PATH'] ?? ''
+            '#SECTION_CODE#' => self::getUrlDataValue($data, 'SECTION_CODE'),
+            '#SECTION_CODE_PATH#' => self::getUrlDataValue($data, 'SECTION_CODE_PATH')
         ];
 
         if (!$siteId) {
@@ -196,6 +217,11 @@ class DetailUrl
         }
 
         return $result;
+    }
+
+    protected static function getUrlDataValue(array $data, string $name): string
+    {
+        return (string) ($data[$name] ?? $data['DETAIL_URL_' . $name] ?? '');
     }
 
     protected static function checkDependency(): bool

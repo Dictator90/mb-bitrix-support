@@ -5,6 +5,7 @@ namespace MB\Bitrix\Foundation;
 
 use Bitrix\Main\Application as BitrixApplication;
 use MB\Bitrix\Config\ArrayRepository as ConfigArrayRepository;
+use MB\Bitrix\Foundation\PackageManifest;
 use MB\Bitrix\Contracts\Config\Repository as ConfigRepositoryContract;
 use MB\Bitrix\File\ServiceProvider as FileServiceProvider;
 use MB\Bitrix\Filesystem\ServiceProvider as FilesystemServiceProvider;
@@ -174,6 +175,22 @@ class Application extends Container
         $this->register(BitrixServiceProvider::class);
         $this->register(LoggerServiceProvider::class);
         $this->register(ModuleServiceProvider::class);
+        $this->registerPackageProviders();
+    }
+
+    /**
+     * Registers service providers advertised by installed mb4it packages via
+     * their composer.json `extra.mb.providers`. This lets satellite packages
+     * (console, migration, …) plug into the kernel without the support package
+     * depending on them (avoiding a composer dependency cycle).
+     */
+    protected function registerPackageProviders(): void
+    {
+        foreach (PackageManifest::create()->providers() as $provider) {
+            if (class_exists($provider)) {
+                $this->register($provider);
+            }
+        }
     }
 
     protected function registerEvents(): void

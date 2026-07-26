@@ -80,8 +80,8 @@ class ImageProcessor implements ImageProcessorContract
     {
         $filePath = $this->getFilePath($fileId);
 
-        // Загружаем через Spatie
-        $spatieImage = SpatieImage::load($filePath);
+        // Загружаем через Spatie выбранным драйвером (Imagick при наличии, иначе GD)
+        $spatieImage = SpatieImage::useImageDriver($this->resolveImageDriver())->loadFile($filePath);
 
         // Применяем все операции напрямую к Spatie Image
         foreach ($operations as $operation) {
@@ -97,6 +97,14 @@ class ImageProcessor implements ImageProcessorContract
         $spatieImage->quality($quality);
 
         return $this->saveImage($spatieImage, $fileId);
+    }
+
+    /**
+     * Определяет драйвер Spatie Image: Imagick при наличии расширения, иначе GD.
+     */
+    private function resolveImageDriver(): string
+    {
+        return extension_loaded('imagick') ? 'imagick' : 'gd';
     }
 
     /**
@@ -124,8 +132,10 @@ class ImageProcessor implements ImageProcessorContract
 
             $tempFormat = $this->detectImageFormat($tempFile);
 
-            $fileArray = $this->files->makeFileArray($tempFile);
-            if (!$fileArray || !empty($fileArray['error'])) {
+            // Регистрируем через нативный CFile::SaveFile (физика + запись в b_file):
+            // ORM FileTable::add() Битрикс не поддерживает («Use CFile class»).
+            $fileArray = \CFile::MakeFileArray($tempFile);
+            if (!is_array($fileArray) || !empty($fileArray['error'])) {
                 throw new Main\SystemException("Failed to create file array");
             }
 
@@ -135,8 +145,8 @@ class ImageProcessor implements ImageProcessorContract
                 : basename($tempFile);
             $fileArray['description'] = $originalFile['DESCRIPTION'] ?? '';
 
-            $fileId = $this->files->saveFile($fileArray, 'image_processor');
-            if (!$fileId) {
+            $fileId = (int)\CFile::SaveFile($fileArray, 'image_processor', true);
+            if ($fileId <= 0) {
                 throw new Main\SystemException("Failed to save file to database");
             }
 
