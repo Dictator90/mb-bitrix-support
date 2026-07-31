@@ -56,6 +56,92 @@ class ImageProcessor implements ImageProcessorContract
     }
 
     /**
+     * Пакетная обработка нескольких вариантов (возможно, разных исходников) за один
+     * batched-lookup кэша вместо запроса на каждый вариант. Промахи обрабатываются
+     * по одному (сама генерация изображения не батчится).
+     *
+     * @param array<int|string, array{fileId:int, operations:array, format?:?string, quality?:int}> $specs
+     * @return array<int|string, int> тот же ключ массива => ID итогового файла (исходный ID при сбое)
+     */
+    public function processMany(array $specs): array
+    {
+        if ($specs === []) {
+            return [];
+        }
+
+        $keys = [];
+        foreach ($specs as $i => $spec) {
+            try {
+                $keys[$i] = $this->generateCacheKey(
+                    (int) $spec['fileId'],
+                    $spec['operations'] ?? [],
+                    $spec['format'] ?? null,
+                    (int) ($spec['quality'] ?? 95)
+                );
+            } catch (\Throwable) {
+                $keys[$i] = null;
+            }
+        }
+
+        $lookupKeys = array_values(array_unique(array_filter($keys, static fn ($k) => $k !== null)));
+        $hits = [];
+        if ($lookupKeys !== []) {
+            $hits = $this->cache instanceof DatabaseImageCache
+                ? $this->cache->getMany($lookupKeys)
+                : $this->getCachedManyFallback($lookupKeys);
+        }
+
+        $result = [];
+        foreach ($specs as $i => $spec) {
+            $fileId = (int) $spec['fileId'];
+            $key = $keys[$i];
+
+            if ($key !== null && isset($hits[$key])) {
+                $result[$i] = $hits[$key];
+                continue;
+            }
+
+            try {
+                $resultId = $this->executeProcessing(
+                    $fileId,
+                    $spec['operations'] ?? [],
+                    $spec['format'] ?? null,
+                    (int) ($spec['quality'] ?? 95)
+                );
+                if ($key !== null) {
+                    $this->cache->set($key, $resultId, $fileId);
+                    $hits[$key] = $resultId;
+                }
+                $result[$i] = $resultId;
+            } catch (\Throwable $e) {
+                $this->logProcessingFailure($fileId, $e);
+                $result[$i] = $fileId;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Фолбэк батч-lookup для кэшей без метода getMany().
+     *
+     * @param string[] $keys
+     * @return array<string, int>
+     */
+    private function getCachedManyFallback(array $keys): array
+    {
+        $out = [];
+        foreach ($keys as $key) {
+            $id = $this->cache->get($key);
+            if ($id !== null) {
+                $out[$key] = $id;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
      * {@inheritdoc}
      */
     public function getCached(int $fileId, array $operations, ?string $format = null, ?int $quality = null): ?int

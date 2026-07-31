@@ -200,6 +200,32 @@ class ImageBuilder
     }
 
     /**
+     * Накопленные операции обработки.
+     *
+     * @return array
+     */
+    public function getOperations(): array
+    {
+        return $this->operations;
+    }
+
+    /**
+     * Целевой формат (null — исходный).
+     */
+    public function getFormat(): ?string
+    {
+        return $this->format;
+    }
+
+    /**
+     * Качество сжатия.
+     */
+    public function getQuality(): int
+    {
+        return $this->quality;
+    }
+
+    /**
      * Сбрасывает все накопленные операции
      *
      * @return self
@@ -273,7 +299,59 @@ class ImageBuilder
         return new self($fileId, $processor);
     }
 
+    /**
+     * Пакетно вычисляет несколько билдеров, разделяя один {@see ImageProcessor} и
+     * {@see FileServiceContract}: общая инициализация таблицы кэша и мемоизация
+     * исходников, один batched-lookup кэша на все варианты и одна пакетная загрузка
+     * данных итоговых файлов — вместо запроса на каждый вариант.
+     *
+     * Билдеры выступают носителями «рецепта» (исходник + операции + формат + качество);
+     * их собственные процессоры при этом не используются.
+     *
+     * @param array<int|string, ImageBuilder> $builders
+     * @return array<int|string, array|null> file-info по каждому билдеру (ключи входного массива сохранены)
+     */
+    public static function resolveMany(array $builders): array
+    {
+        if ($builders === []) {
+            return [];
+        }
+
+        $files = self::resolveFiles();
+        $processor = new ImageProcessor(files: $files);
+
+        $specs = [];
+        foreach ($builders as $i => $builder) {
+            $specs[$i] = [
+                'fileId' => $builder->getFileId(),
+                'operations' => $builder->getOperations(),
+                'format' => $builder->getFormat(),
+                'quality' => $builder->getQuality(),
+            ];
+        }
+
+        $resultIds = $processor->processMany($specs);
+
+        $uniqueIds = array_values(array_unique(array_map('intval', $resultIds)));
+        if ($uniqueIds !== []) {
+            $files->getFilesData($uniqueIds);
+        }
+
+        $out = [];
+        foreach ($builders as $i => $builder) {
+            $resultId = (int) ($resultIds[$i] ?? $builder->getFileId());
+            $out[$i] = $files->getFileData($resultId);
+        }
+
+        return $out;
+    }
+
     private function resolveFileService(): FileServiceContract
+    {
+        return self::resolveFiles();
+    }
+
+    private static function resolveFiles(): FileServiceContract
     {
         try {
             /** @var FileServiceContract $service */

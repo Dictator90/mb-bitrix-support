@@ -17,6 +17,9 @@ use MB\Bitrix\Filesystem\Filesystem;
  */
 class DatabaseImageCache implements ImageCache
 {
+    /** Проверка существования таблицы кэша выполняется один раз на процесс. */
+    private static bool $tableChecked = false;
+
     private FileServiceContract $files;
 
     /**
@@ -53,6 +56,48 @@ class DatabaseImageCache implements ImageCache
         }
 
         return null;
+    }
+
+    /**
+     * Пакетный аналог {@see get()}: возвращает валидные соответствия «ключ → ID файла»
+     * одним запросом вместо запроса на каждый ключ. Записи с отсутствующим на диске
+     * итоговым файлом удаляются (как в get()), чтобы последующая переобработка смогла
+     * записать кэш по тому же ключу.
+     *
+     * @param string[] $keys
+     * @return array<string, int>
+     */
+    public function getMany(array $keys): array
+    {
+        $keys = array_values(array_unique(array_filter($keys, static fn ($k) => $k !== '')));
+        if ($keys === []) {
+            return [];
+        }
+
+        $objects = CacheTable::query()
+            ->addSelect('ID')
+            ->addSelect('CACHE_KEY')
+            ->addSelect('FILE_ID')
+            ->addSelect('FILE')
+            ->whereIn('CACHE_KEY', $keys)
+            ->fetchCollection();
+
+        $result = [];
+        $staleKeys = [];
+        foreach ($objects as $object) {
+            $file = $object->get('FILE')?->collectValues(recursive: true);
+            if ($file && $this->fileExists($file)) {
+                $result[$object->getCacheKey()] = $object->getFileId();
+            } else {
+                $staleKeys[] = $object->getCacheKey();
+            }
+        }
+
+        if ($staleKeys !== []) {
+            $this->deleteMany($staleKeys);
+        }
+
+        return $result;
     }
 
     /**
@@ -99,11 +144,17 @@ class DatabaseImageCache implements ImageCache
      */
     private function initTable(): void
     {
+        if (self::$tableChecked) {
+            return;
+        }
+
         $connection = Main\Application::getConnection();
 
         if (!$connection->isTableExists(CacheTable::getTableName())) {
             CacheTable::getEntity()->createDbTable();
         }
+
+        self::$tableChecked = true;
     }
 
     /**
@@ -115,6 +166,24 @@ class DatabaseImageCache implements ImageCache
         $connection = Main\Application::getConnection();
         $helper = $connection->getSqlHelper();
         $connection->query("DELETE FROM {$helper->forSql(CacheTable::getTableName())} WHERE CACHE_KEY = '{$helper->forSql($key)}'");
+    }
+
+    /**
+     * @param string[] $keys
+     */
+    private function deleteMany(array $keys): void
+    {
+        if ($keys === []) {
+            return;
+        }
+
+        $connection = Main\Application::getConnection();
+        $helper = $connection->getSqlHelper();
+        $escaped = array_map(static fn ($k) => "'" . $helper->forSql($k) . "'", $keys);
+        $connection->query(
+            'DELETE FROM ' . $helper->forSql(CacheTable::getTableName())
+            . ' WHERE CACHE_KEY IN (' . implode(',', $escaped) . ')'
+        );
     }
 
     private function resolveFileService(): FileServiceContract
