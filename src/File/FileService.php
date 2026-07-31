@@ -9,12 +9,11 @@ use Bitrix\Main\Config\Option;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventResult;
 use Bitrix\Main\File\Image;
-use Bitrix\Main\File\Internal\FileDuplicateTable;
 use Bitrix\Main\File\Internal\FileHashTable;
 use Bitrix\Main\FileTable;
 use Bitrix\Main\Security;
-use Bitrix\Main\Type\DateTime as BitrixDateTime;
 use Bitrix\Main\Web;
+use CFile;
 use MB\Bitrix\Bitrix\Adapters\ApplicationAdapter;
 use MB\Bitrix\Bitrix\Adapters\LocalizationAdapter;
 use MB\Bitrix\Bitrix\Adapters\QuotaAdapter;
@@ -84,9 +83,14 @@ class FileService implements FileServiceContract
 
         // Подготовка данных файла
         $preparedData = $this->prepareFileData($fileData, $savePath, $forceRandom, $skipExtension, $dirAdd);
-        // Проверка дубликатов
-        if ($duplicate = $this->duplicateResolver->find($preparedData['FILE_SIZE'], $preparedData['FILE_HASH'])) {
-            return $this->handleDuplicate($duplicate, $preparedData);
+
+        // Проверка дубликатов: 0 от резолвера — оригинал недоступен, сохраняем обычным путём
+        $duplicate = $this->duplicateResolver->find($preparedData['FILE_SIZE'], $preparedData['FILE_HASH']);
+        if ($duplicate !== null) {
+            $duplicateId = $this->handleDuplicate($duplicate, $preparedData);
+            if ($duplicateId > 0) {
+                return $duplicateId;
+            }
         }
 
         // Сохранение физического файла
@@ -225,18 +229,19 @@ class FileService implements FileServiceContract
     }
 
     /**
-     * Обновляет описание файла
+     * Обновляет описание файла.
+     *
+     * Запись идёт через CFile: ORM-путь ядро запрещает
+     * ({@see \Bitrix\Main\FileTable::update()} бросает NotImplementedException).
      */
     public function updateDescription(int $fileId, string $description): bool
     {
         try {
-            $update = FileTable::update($fileId, [
-                'DESCRIPTION' => $description,
-                'TIMESTAMP_X' => new BitrixDateTime(),
-            ]);
-            if (!$update->isSuccess()) {
+            if ($this->getFileData($fileId) === null) {
                 return false;
             }
+
+            CFile::UpdateDesc($fileId, $description);
             $this->cleanCache($fileId);
 
             return true;
@@ -246,35 +251,30 @@ class FileService implements FileServiceContract
     }
 
     /**
-     * Удаляет файл
+     * Удаляет файл вместе с физической копией, ресайзами, хэшем и записями
+     * о дубликатах — всё это делает CFile::Delete(), включая события
+     * OnFileDelete / OnPhysicalFileDelete и учёт дисковой квоты.
+     *
+     * Если на файл ссылаются дубликаты, ядро помечает его удалённым и сносит
+     * вместе с последней ссылкой — строка b_file в этот момент ещё жива, но
+     * операция считается успешной. false — файла с таким ID нет.
      */
     public function deleteFile(int $fileId): bool
     {
         try {
-            $file = $this->getFileData($fileId);
-            if (!$file) {
-                return false;
-            }
-            $this->deletePhysicalFile($file);
-
-            FileDuplicateTable::markDeleted($fileId);
-            FileHashTable::delete($fileId);
-
-            $delete = FileTable::delete($fileId);
-            if (!$delete->isSuccess()) {
+            if ($this->getFileData($fileId) === null) {
                 return false;
             }
 
+            CFile::Delete($fileId);
             $this->cleanCache($fileId);
 
-            $this->diskQuotaNotifyDelete((int)$file['FILE_SIZE']);
-
             return true;
-        } catch (\Exception $e) {
+        } catch (\Exception) {
             return false;
         }
     }
-    
+
     /**
      * Возвращает абсолютный путь к файлу
      */
@@ -406,7 +406,9 @@ class FileService implements FileServiceContract
         }
 
         if (empty($fileData['type'])) {
-            $fileData['type'] = $this->getContentType($fileData['tmp_name'] ?? '');
+            $fileData['type'] = isset($fileData['content'])
+                ? $this->contentTypeFromString((string)$fileData['content'])
+                : $this->getContentType($fileData['tmp_name'] ?? '');
         }
 
         $fileData['ORIGINAL_NAME'] = $fileData['name'] ?? '';
@@ -447,7 +449,9 @@ class FileService implements FileServiceContract
         $fileName = $this->transformFileName($fileData['name'], $forceRandom, $skipExtension);
         $filePath = $this->generateFilePath($savePath, $fileName, $forceRandom, $dirAdd);
 
-        $imageInfo = $this->metadataReader->imageInfo((string) ($fileData['tmp_name'] ?? ''));
+        $imageInfo = isset($fileData['content'])
+            ? $this->imageInfoFromString((string)$fileData['content'])
+            : $this->metadataReader->imageInfo((string) ($fileData['tmp_name'] ?? ''));
 
         return [
             'FILE_NAME' => $fileName,
@@ -498,44 +502,40 @@ class FileService implements FileServiceContract
         }
     }
 
+    /**
+     * Регистрирует уже сохранённый на диске файл в b_file.
+     *
+     * Запись идёт через CFile::DoInsert(): ORM-путь ядро запрещает
+     * ({@see \Bitrix\Main\FileTable::add()} бросает NotImplementedException).
+     * DoInsert сам кладёт хэш файла в b_file_hash и рассылает OnAfterFileSave.
+     */
     protected function saveToDatabase(array $fileData): int
     {
+        $fileSize = (int)round((float)$fileData['FILE_SIZE']);
+
         $fields = [
-            'TIMESTAMP_X' => new BitrixDateTime(),
             'MODULE_ID' => (string)$fileData['MODULE_ID'],
             'HEIGHT' => (int)$fileData['HEIGHT'],
             'WIDTH' => (int)$fileData['WIDTH'],
-            'FILE_SIZE' => (int)round((float)$fileData['FILE_SIZE']),
+            'FILE_SIZE' => $fileSize,
             'CONTENT_TYPE' => (string)$fileData['CONTENT_TYPE'],
             'SUBDIR' => (string)$fileData['SUBDIR'],
             'FILE_NAME' => (string)$fileData['FILE_NAME'],
             'ORIGINAL_NAME' => (string)$fileData['ORIGINAL_NAME'],
             'DESCRIPTION' => (string)$fileData['DESCRIPTION'],
-            'HANDLER_ID' => ($fileData['HANDLER_ID'] ?? '') !== '' ? (string)$fileData['HANDLER_ID'] : null,
-            'EXTERNAL_ID' => ($fileData['EXTERNAL_ID'] ?? '') !== '' ? (string)$fileData['EXTERNAL_ID'] : null,
+            'HANDLER_ID' => (string)($fileData['HANDLER_ID'] ?? ''),
+            'EXTERNAL_ID' => (string)($fileData['EXTERNAL_ID'] ?? ''),
+            'FILE_HASH' => (string)($fileData['FILE_HASH'] ?? ''),
         ];
 
-        $add = FileTable::add($fields);
-        if (!$add->isSuccess()) {
-            throw new Main\SystemException(implode('; ', $add->getErrorMessages()));
-        }
-
-        $id = (int)$add->getId();
+        $id = (int)CFile::DoInsert($fields);
         if ($id <= 0) {
             throw new Main\SystemException('Unable to insert into b_file');
         }
 
-        if ($id && $fileData['FILE_HASH']) {
-            FileHashTable::add([
-                'FILE_ID' => $id,
-                'FILE_SIZE' => $fileData['FILE_SIZE'],
-                'FILE_HASH' => $fileData['FILE_HASH'],
-            ]);
-        }
-
         $this->cleanCache($id);
 
-        $this->diskQuotaNotifyInsert((int)$fileData['FILE_SIZE']);
+        $this->diskQuotaNotifyInsert($fileSize);
 
         return $id;
     }
@@ -647,6 +647,57 @@ class FileService implements FileServiceContract
         }
     }
 
+    /**
+     * Размеры картинки, переданной содержимым (файла на диске ещё нет —
+     * {@see MetadataReaderContract::imageInfo()} работает по пути).
+     *
+     * @return array{width: int, height: int}|null
+     */
+    protected function imageInfoFromString(string $content): ?array
+    {
+        $info = $content !== '' ? @getimagesizefromstring($content) : false;
+
+        if (!is_array($info)) {
+            return null;
+        }
+
+        return [
+            'width' => (int)$info[0],
+            'height' => (int)$info[1],
+        ];
+    }
+
+    /**
+     * MIME-тип содержимого, для которого ещё нет файла на диске.
+     */
+    protected function contentTypeFromString(string $content): string
+    {
+        if ($content === '') {
+            return 'application/octet-stream';
+        }
+
+        $info = @getimagesizefromstring($content);
+        $mime = is_array($info) ? (string)$info['mime'] : '';
+
+        if ($mime !== '') {
+            return $mime;
+        }
+
+        if (function_exists('finfo_open')) {
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            if ($finfo !== false) {
+                $detected = (string)finfo_buffer($finfo, $content);
+                finfo_close($finfo);
+
+                if ($detected !== '') {
+                    return $detected;
+                }
+            }
+        }
+
+        return 'application/octet-stream';
+    }
+
     protected function getImageInfo(string $filePath): ?array
     {
         try {
@@ -728,11 +779,6 @@ class FileService implements FileServiceContract
     public function getContentType(string $path): string
     {
         return $this->metadataReader->contentType($path);
-    }
-
-    protected function deletePhysicalFile(array $file): void
-    {
-        $this->uploader->delete($file);
     }
 
     protected function getDocumentRoot(): string
@@ -875,13 +921,4 @@ class FileService implements FileServiceContract
     {
         $this->quotaAdapter->notifyInsert($fileSize);
     }
-
-    /**
-     * @internal См. diskQuotaCheckUpload()
-     */
-    protected function diskQuotaNotifyDelete(int $fileSize): void
-    {
-        $this->quotaAdapter->notifyDelete($fileSize);
-    }
-
 }

@@ -207,6 +207,66 @@ namespace {
         }
     }
 
+    if (! class_exists('CFile', false)) {
+        class CFile
+        {
+            /**
+             * @param array<string,mixed> $arFields
+             */
+            public static function DoInsert(array $arFields): int
+            {
+                return 0;
+            }
+
+            public static function UpdateDesc(int $ID, string $desc): void
+            {
+            }
+
+            public static function Delete(int $ID): void
+            {
+            }
+
+            public static function CleanCache(int $fileId): void
+            {
+            }
+
+            public static function AddDuplicate(int $originalId, ?int $duplicateId = null, bool $resolvePossibleOriginCycle = true): void
+            {
+            }
+
+            /**
+             * @param array<string,mixed> $arFile
+             */
+            public static function SaveFile(array $arFile, string $strSavePath, bool $forceRandom = false, bool $skipExtension = false, string $dirAdd = ''): int|string
+            {
+                return 0;
+            }
+
+            /**
+             * @return array<string,mixed>|null
+             */
+            public static function MakeFileArray(mixed $path, mixed $mimetype = false, bool $skipInternal = false, string $external_id = ''): ?array
+            {
+                return null;
+            }
+
+            public static function GetPath(int $fileId): ?string
+            {
+                return null;
+            }
+
+            /**
+             * @param array<string,mixed>|int $file
+             * @param array<string,mixed> $size
+             * @return array<string,mixed>|false
+             */
+            public static function ResizeImageGet(array|int $file, array $size, string $resizeType = 'BX_RESIZE_IMAGE_PROPORTIONAL', bool $initSizes = false): array|false
+            {
+                return false;
+            }
+        }
+    }
+
     if (! class_exists(\CBitrixComponent::class, false)) {
         class CBitrixComponent
         {
