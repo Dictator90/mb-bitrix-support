@@ -236,6 +236,8 @@ class ImageProcessor implements ImageProcessorContract
                 throw new Main\SystemException("Failed to save file to database");
             }
 
+            $this->restoreDeduplicatedFile($fileId, $tempFile);
+
             return $fileId;
 
         } finally {
@@ -246,6 +248,47 @@ class ImageProcessor implements ImageProcessorContract
             } catch (\Throwable) {
                 // Игнорируем ошибки очистки временного файла
             }
+        }
+    }
+
+    /**
+     * Восстанавливает физический файл производного изображения, если контроль
+     * дубликатов ядра (опция `main.control_file_duplicates`) сопоставил новую
+     * запись `b_file` с записью, файла которой нет на диске.
+     *
+     * `CFile::SaveFile()` в этом случае подменяет `SUBDIR` / `FILE_NAME` найденным
+     * по размеру и md5 «оригиналом» и удаляет только что записанную копию. Если
+     * такой оригинал указывает в пустоту — типичное состояние после переноса базы
+     * без каталога `upload` — производное отдаёт 404, а кэш
+     * ({@see DatabaseImageCache::get()}) на каждом рендере признаёт запись
+     * устаревшей и запускает обработку заново, плодя строки `b_file` с одним и тем
+     * же битым путём. Содержимое совпадает по размеру и md5, поэтому копия
+     * временного файла по целевому пути корректна и лечит сразу все записи,
+     * ссылающиеся на этот путь.
+     *
+     * Не бросает исключений: изображение уже сохранено, а неудачное
+     * восстановление не должно ломать рендер.
+     */
+    private function restoreDeduplicatedFile(int $fileId, string $sourceFile): void
+    {
+        try {
+            $targetPath = $this->files->getFilePath($fileId);
+            $filesystem = Filesystem::instance();
+
+            if ($targetPath === null
+                || $filesystem->exists($targetPath)
+                || !$filesystem->exists($sourceFile)
+            ) {
+                return;
+            }
+
+            $filesystem->copy($sourceFile, $targetPath);
+
+            if (defined('BX_FILE_PERMISSIONS')) {
+                $filesystem->chmod($targetPath, BX_FILE_PERMISSIONS);
+            }
+        } catch (\Throwable $e) {
+            $this->logProcessingFailure($fileId, $e);
         }
     }
 

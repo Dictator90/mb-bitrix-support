@@ -49,10 +49,9 @@ class DatabaseImageCache implements ImageCache
             $file = $object->get('FILE')?->collectValues(recursive: true);
             if ($file && $this->fileExists($file)) {
                 return $object->getFileId();
-            } else {
-                $object->delete();
-                $object->save();
             }
+
+            $this->delete($key);
         }
 
         return null;
